@@ -1,0 +1,18 @@
+# Python Backend Dependencies
+
+# Data Processing
+pandas>=2.2.0
+numpy>=1.26.0
+scikit-learn>=1.4.0
+pdfplumber>=0.11.0
+
+# API Server
+fastapi>=0.109.0
+uvicorn>=0.27.0
+python-multipart>=0.0.9
+
+# Auto-fetch feature dependencies
+httpx>=0.27.0
+beautifulsoup4>=4.12.0
+playwright>=1.40.0
+selenium>=4.0.0

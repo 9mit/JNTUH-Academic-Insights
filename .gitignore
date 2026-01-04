@@ -1,0 +1,103 @@
+# ======================
+# Dependencies
+# ======================
+node_modules/
+.pnp
+.pnp.js
+
+# ======================
+# Build Outputs
+# ======================
+dist/
+dist-ssr/
+build/
+*.local
+
+# ======================
+# Python
+# ======================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+.installed.cfg
+.mypy_cache/
+.pytest_cache/
+
+# Virtual Environments
+.env
+.venv/
+venv/
+ENV/
+env/
+
+# ======================
+# Logs
+# ======================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ======================
+# IDE & Editors
+# ======================
+.idea/
+# .vscode/ - Keeping for project-specific settings
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.code-workspace
+
+# ======================
+# OS Generated Files
+# ======================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ======================
+# Testing
+# ======================
+coverage/
+.nyc_output/
+
+# ======================
+# Playwright
+# ======================
+playwright-report/
+playwright/.cache/
+test-results/
+
+# ======================
+# Temporary Files
+# ======================
+*.local
+.cache/
+tmp/
+temp/
+*.tmp
+*.temp
+
+# ======================
+# Uploaded Files
+# ======================
+uploads/
+uploaded_pdfs/
+
+# ======================
+# Environment Variables
+# ======================
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
