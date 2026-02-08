@@ -59,16 +59,14 @@ def read_root():
 async def fetch_by_hall_ticket(request: HallTicketRequest):
     """
     Fetches academic results using Playwright browser automation.
+    Falls back to Selenium ChromeDriver if Playwright fails.
     Includes concurrency limiting (max 3 browsers) to support 500+ req/day safely.
     """
     import concurrent.futures
-    from playwright.sync_api import sync_playwright
     from bs4 import BeautifulSoup
     import asyncio
     
     # Global semaphore to limit concurrent browser instances
-    # 3 concurrent browsers = ~9 requests/min = ~540 requests/hour
-    # This easily handles the 500/day requirement without crashing the server RAM.
     if not hasattr(app.state, 'browser_semaphore'):
         app.state.browser_semaphore = asyncio.Semaphore(3)
 
@@ -77,44 +75,88 @@ async def fetch_by_hall_ticket(request: HallTicketRequest):
     if len(htno) < 10:
         raise HTTPException(status_code=400, detail="Invalid hall ticket number format. Must be 10 characters.")
     
-    def scrape_with_browser(hall_ticket: str):
+    def scrape_with_playwright(hall_ticket: str):
         """Use Playwright to render JavaScript and get the full HTML"""
+        from playwright.sync_api import sync_playwright
+        
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
             
             try:
-                # Navigate to the results page
                 url = f"https://jntuhresults.vercel.app/academicresult/result?htno={hall_ticket}"
                 page.goto(url, timeout=60000)
-                
-                # Wait for the page to fully load
                 page.wait_for_load_state("networkidle", timeout=30000)
-                
-                # Wait additional time for React to render
                 page.wait_for_timeout(5000)
-                
-                # Get the rendered HTML
                 html_content = page.content()
-                
                 browser.close()
                 return html_content
-                
             except Exception as e:
                 browser.close()
                 raise e
     
+    def scrape_with_selenium(hall_ticket: str):
+        """Fallback: Use Selenium ChromeDriver to render JavaScript"""
+        from selenium import webdriver
+        from selenium.webdriver.chrome.service import Service
+        from selenium.webdriver.chrome.options import Options
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.common.by import By
+        from webdriver_manager.chrome import ChromeDriverManager
+        
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--window-size=1920,1080")
+        
+        driver = None
+        try:
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            
+            url = f"https://jntuhresults.vercel.app/academicresult/result?htno={hall_ticket}"
+            driver.get(url)
+            
+            # Wait for page to load
+            WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located((By.TAG_NAME, "table"))
+            )
+            
+            # Additional wait for React rendering
+            import time
+            time.sleep(5)
+            
+            html_content = driver.page_source
+            return html_content
+        finally:
+            if driver:
+                driver.quit()
+    
     try:
-        # Acquire semaphore to limit concurrency
         async with app.state.browser_semaphore:
-            # Run Playwright in thread pool (it's sync)
             loop = asyncio.get_event_loop()
+            html_content = None
+            
+            # Try Playwright first
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    html_content = await loop.run_in_executor(executor, scrape_with_browser, htno)
-            except Exception as e:
-                print(f"Playwright failed: {e}")
-                raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}")
+                    html_content = await loop.run_in_executor(executor, scrape_with_playwright, htno)
+                print(f"[INFO] Playwright succeeded for {htno}")
+            except Exception as pw_error:
+                print(f"[WARN] Playwright failed: {pw_error}. Trying ChromeDriver fallback...")
+                
+                # Fallback to Selenium ChromeDriver
+                try:
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        html_content = await loop.run_in_executor(executor, scrape_with_selenium, htno)
+                    print(f"[INFO] ChromeDriver fallback succeeded for {htno}")
+                except Exception as sel_error:
+                    print(f"[ERROR] Both Playwright and ChromeDriver failed: {sel_error}")
+                    raise HTTPException(status_code=500, detail=f"Scraping failed with both Playwright and ChromeDriver. Please try PDF upload instead.")
+
         
         # Parse with BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -144,6 +186,12 @@ async def fetch_by_hall_ticket(request: HallTicketRequest):
         subjects = []
         current_year = 1
         current_sem = 1
+        
+        # Detect regulation from hall ticket for accurate grade mapping
+        detected_regulation = detect_regulation(htno)
+        valid_grades = VALID_GRADES_BY_REGULATION.get(detected_regulation, VALID_GRADES_BY_REGULATION["R18"])
+        print(f"[INFO] Detected regulation: {detected_regulation} for {htno}")
+
         
         for table in tables[1:]:
             rows = table.find_all('tr')
@@ -315,7 +363,8 @@ async def fetch_by_hall_ticket(request: HallTicketRequest):
                 if not grade:
                     for cell in cells:
                         val = cell.get_text(strip=True)
-                        if val in ['O', 'A+', 'A', 'B+', 'B', 'C', 'F', 'Ab']:
+                        # Use regulation-specific valid grades
+                        if val in valid_grades:
                              grade = val; break
                              
                 # Valid subject check
@@ -328,10 +377,11 @@ async def fetch_by_hall_ticket(request: HallTicketRequest):
                             "subject_name": name,
                             "grade": grade,
                             "credits": credits if credits is not None else 3.0,
-                            "grade_points": get_grade_points(grade),
+                            "grade_points": get_grade_points(grade, detected_regulation),
                             "year": min(current_year, 4),
                             "sem": current_sem,
-                            "htno": htno
+                            "htno": htno,
+                            "regulation": detected_regulation
                         }
                         # Add marks if available
                         if internal is not None:
@@ -362,14 +412,14 @@ async def fetch_by_hall_ticket(request: HallTicketRequest):
             "student_name": student_name,
             "subjects": subjects,
             "total_subjects": len(subjects),
-            "official_cgpa": official_cgpa
+            "official_cgpa": official_cgpa,
+            "regulation": detected_regulation
         }
     
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}. Please try PDF upload instead.")
-
 
 
 
@@ -386,13 +436,71 @@ def parse_exam_code(exam_code: str) -> dict:
     return {"year": 1, "sem": 1}
 
 
-def get_grade_points(grade: str) -> int:
-    """Convert grade to grade points."""
-    grade_map = {
+def detect_regulation(htno: str) -> str:
+    """
+    Detect JNTUH regulation from hall ticket number.
+    Hall ticket format: YYBBBANNNN where YY = admission year
+    R22: 22+, R18: 18-21, R16: 16-17, R13: 13-15
+    """
+    if not htno or len(htno) < 2:
+        return "R18"  # Default fallback
+    
+    try:
+        year_prefix = int(htno[:2])
+        if year_prefix >= 22:
+            return "R22"
+        elif year_prefix >= 18:
+            return "R18"
+        elif year_prefix >= 16:
+            return "R16"
+        elif year_prefix >= 13:
+            return "R13"
+        else:
+            return "R13"  # Very old batches
+    except ValueError:
+        return "R18"
+
+
+# Regulation-specific grade point mappings
+GRADE_POINTS_BY_REGULATION = {
+    "R22": {
         "O": 10, "A+": 9, "A": 8, "B+": 7, "B": 6, "C": 5, "D": 4,
         "F": 0, "Ab": 0, "-": 0
+    },
+    "R18": {
+        "O": 10, "A+": 9, "A": 8, "B+": 7, "B": 6, "C": 5, "D": 4,
+        "F": 0, "Ab": 0, "-": 0
+    },
+    "R16": {
+        # R16 uses S grade (10 points) instead of O
+        "S": 10, "A": 9, "B": 8, "C": 7, "D": 6, "E": 5,
+        "O": 10,  # Alias for compatibility
+        "A+": 9, "B+": 8, "C+": 7,  # Some sources use these
+        "F": 0, "Ab": 0, "-": 0
+    },
+    "R13": {
+        # R13 uses S grade (10 points) similar to R16
+        "S": 10, "A": 9, "B": 8, "C": 7, "D": 6, "E": 5,
+        "O": 10,  # Alias for compatibility
+        "A+": 9, "B+": 8, "C+": 7,  # Some sources use these
+        "F": 0, "Ab": 0, "-": 0
     }
+}
+
+# Valid grades by regulation (for fallback detection)
+VALID_GRADES_BY_REGULATION = {
+    "R22": ['O', 'A+', 'A', 'B+', 'B', 'C', 'D', 'F', 'Ab'],
+    "R18": ['O', 'A+', 'A', 'B+', 'B', 'C', 'D', 'F', 'Ab'],
+    "R16": ['S', 'A', 'B', 'C', 'D', 'E', 'F', 'Ab', 'O', 'A+', 'B+'],
+    "R13": ['S', 'A', 'B', 'C', 'D', 'E', 'F', 'Ab', 'O', 'A+', 'B+']
+}
+
+
+def get_grade_points(grade: str, regulation: str = "R18") -> int:
+    """Convert grade to grade points based on regulation."""
+    grade_map = GRADE_POINTS_BY_REGULATION.get(regulation, GRADE_POINTS_BY_REGULATION["R18"])
     return grade_map.get(grade, 0)
+
 
 
 @app.post("/analyze/pdf")

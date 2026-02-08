@@ -88,15 +88,20 @@ function CelebrationModal({ isOpen, onClose, studentName }: { isOpen: boolean; o
 
 type ImportMode = 'pdf' | 'htno';
 
+
 export default function PDFUploader() {
-    const { importSemesters, setStudentInfo, setRegulation, setOfficialCGPA, data } = useAcademic();
+    const { importSemesters, setStudentInfo, setRegulation, setOfficialCGPA, clearAllData, data } = useAcademic();
     const [mode, setMode] = useState<ImportMode>('pdf');
     const [isDragging, setIsDragging] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [showCelebration, setShowCelebration] = useState(false);
     const [htnoInput, setHtnoInput] = useState('');
 
+
     const processResults = useCallback((subjects: any[], htno: string, studentName?: string, officialCGPA?: number) => {
+        // Clear all previous data before importing new results
+        clearAllData();
+
         const semesterMap: { [key: string]: any[] } = {};
         let hasAnyFail = false;
 
@@ -163,7 +168,8 @@ export default function PDFUploader() {
                 setTimeout(() => setShowCelebration(true), 1000);
             }
         }
-    }, [importSemesters, setStudentInfo, setRegulation, setOfficialCGPA]);
+    }, [clearAllData, importSemesters, setStudentInfo, setRegulation, setOfficialCGPA]);
+
 
     const handleFiles = useCallback(async (files: FileList | null) => {
         if (!files || files.length === 0) return;
