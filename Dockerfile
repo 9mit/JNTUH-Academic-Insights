@@ -1,53 +1,53 @@
-# Use Python as base image
+# Use Python 3.11 slim as base
 FROM python:3.11-slim
 
-# Install Node.js
-RUN apt-get update && apt-get install -y \
-    curl \
-    gnupg \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+# Set working directory
+WORKDIR /app
 
-# Install Playwright dependencies
+# Install system dependencies for Playwright
 RUN apt-get update && apt-get install -y \
-    libnss3 \
-    libnspr4 \
-    libatk1.0-0 \
+    wget \
+    gnupg \
+    ca-certificates \
+    fonts-liberation \
+    libasound2 \
     libatk-bridge2.0-0 \
+    libatk1.0-0 \
     libcups2 \
-    libdrm2 \
     libdbus-1-3 \
-    libxkbcommon0 \
-    libatspi2.0-0 \
+    libdrm2 \
+    libgbm1 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
     libxcomposite1 \
     libxdamage1 \
     libxfixes3 \
+    libxkbcommon0 \
     libxrandr2 \
-    libgbm1 \
-    libasound2 \
-    libpango-1.0-0 \
-    libcairo2 \
+    xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-
-# Copy package files first for caching
-COPY package*.json ./
-COPY requirements.txt ./
+# Copy requirements first for caching
+COPY requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install playwright
-RUN playwright install chromium
 
-# Install Node dependencies and build
-RUN npm install
-COPY . .
-RUN npm run build
+# Install Playwright browsers
+RUN playwright install chromium
+RUN playwright install-deps chromium
+
+# Copy application code
+COPY server.py .
+COPY backend/ ./backend/
 
 # Expose port
 EXPOSE 8000
 
-# Start the server
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/ || exit 1
+
+# Start the application
 CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
