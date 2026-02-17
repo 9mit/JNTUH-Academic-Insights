@@ -144,9 +144,11 @@ export default function PDFUploader() {
                     const year = parseInt(yearStr);
                     let regulation: Regulation = 'R18'; // Default fallback
 
-                    if (year >= 22) regulation = 'R22';
+                    if (year >= 24) regulation = 'R24';
+                    else if (year >= 22) regulation = 'R22';
                     else if (year >= 18) regulation = 'R18';
                     else if (year >= 16) regulation = 'R16';
+                    else if (year === 15) regulation = 'R15';
                     else if (year >= 13) regulation = 'R13';
 
                     setRegulation(regulation);

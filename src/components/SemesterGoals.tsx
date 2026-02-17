@@ -19,6 +19,16 @@ export default function SemesterGoals() {
     const [goals, setGoals] = useState<SemesterGoal[]>([]);
     const [saved, setSaved] = useState(false);
 
+    const initializeDefaultGoals = () => {
+        const defaultGoals: SemesterGoal[] = data.semesters.map(sem => ({
+            semId: sem.id,
+            year: sem.year,
+            sem: sem.sem,
+            target: 8.0,
+        }));
+        setGoals(defaultGoals);
+    };
+
     // Initialize goals from localStorage or defaults
     useEffect(() => {
         const stored = localStorage.getItem(STORAGE_KEY);
@@ -31,17 +41,8 @@ export default function SemesterGoals() {
         } else {
             initializeDefaultGoals();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-
-    const initializeDefaultGoals = () => {
-        const defaultGoals: SemesterGoal[] = data.semesters.map(sem => ({
-            semId: sem.id,
-            year: sem.year,
-            sem: sem.sem,
-            target: 8.0, // Default target
-        }));
-        setGoals(defaultGoals);
-    };
 
     const updateGoal = (semId: string, target: number) => {
         setGoals(prev => prev.map(g =>
@@ -136,8 +137,8 @@ export default function SemesterGoals() {
                     <button
                         onClick={saveGoals}
                         className={`px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ${saved
-                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                : 'bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30'
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30'
                             }`}
                     >
                         {saved ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}

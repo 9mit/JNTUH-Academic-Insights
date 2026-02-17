@@ -1,4 +1,6 @@
 {
     "css.lint.unknownAtRules": "ignore",
-    "css.lint.propertyIgnoredDueToDisplay": "ignore"
+    "css.lint.propertyIgnoredDueToDisplay": "ignore",
+    "scss.lint.unknownAtRules": "ignore",
+    "less.lint.unknownAtRules": "ignore"
 }

@@ -17,6 +17,7 @@ export function exportToExcel(data: ExportData): void {
     const workbook = XLSX.utils.book_new();
 
     // 1. Subjects Sheet
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const subjectsData: any[] = [];
     data.semesters.forEach(sem => {
         if (sem.mode === 'detailed') {
@@ -38,6 +39,7 @@ export function exportToExcel(data: ExportData): void {
     }
 
     // 2. Semesters Sheet
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const semestersData: any[] = [];
     data.semesters.forEach(sem => {
         const sgpa = getSemesterSGPA(sem);
@@ -113,6 +115,7 @@ export function decodeShareableData(encoded: string): ExportData | null {
         const minData = JSON.parse(jsonStr);
 
         return {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             semesters: minData.s.map((sem: any, idx: number) => ({
                 id: `${sem.y}-${sem.m}`,
                 year: sem.y,
@@ -120,6 +123,7 @@ export function decodeShareableData(encoded: string): ExportData | null {
                 mode: sem.mode,
                 manualSGPA: sem.sgpa,
                 isExpanded: idx === 0,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 subjects: (sem.subs || []).map((sub: any, subIdx: number) => ({
                     id: `sub-${idx}-${subIdx}`,
                     name: sub.n,

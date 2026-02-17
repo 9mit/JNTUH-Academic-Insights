@@ -1,155 +1,115 @@
-import numpy as np
 import pandas as pd
+import numpy as np
 from sklearn.linear_model import LinearRegression
-from typing import Dict, List, Optional, Tuple
+import warnings
+
+warnings.filterwarnings('ignore')
 
 class AcademicAnalyzer:
-    def __init__(self, semesters_df: pd.DataFrame, subjects_df: pd.DataFrame = None):
-        self.df = semesters_df
+    def __init__(self, df=None, semesters_df=None, subjects_df=None):
+        if df is not None:
+            self.semesters_df = df
+        elif semesters_df is not None:
+            self.semesters_df = semesters_df
+        else:
+            self.semesters_df = pd.DataFrame()
+            
         self.subjects_df = subjects_df if subjects_df is not None else pd.DataFrame()
-        
-    def analyze_performance(self) -> Dict:
-        """
-        Advanced analysis using Numpy/Pandas
-        """
-        stats = {
-            'consistency_score': 0, 
-            'grade_stability': 'Unknown',
-            'dominant_grade': 'N/A',
-            'grade_points_mean': 0.0,
-            'grade_points_std': 0.0
-        }
-        
-        if self.subjects_df.empty:
-            return stats
-            
-        # 1. Calculate Grade Statistics
-        gp_mean = self.subjects_df['grade_points'].mean()
-        gp_std = self.subjects_df['grade_points'].std()
-        
-        # 2. Consistency Score (0-100)
-        # Based on Coefficient of Variation (CV) = StdDev / Mean
-        # Lower CV is better. If Mean is 0, score is 0.
-        if gp_mean > 0:
-            cv = gp_std / gp_mean
-            # Map CV to score: CV 0.0 -> 100, CV 0.5 -> 0
-            raw_score = 100 * (1 - (cv / 0.5))
-            stats['consistency_score'] = max(0, min(100, round(raw_score)))
-        
-        # 3. Grade Stability Text
-        if gp_std < 0.5: stats['grade_stability'] = 'Very High'
-        elif gp_std < 1.0: stats['grade_stability'] = 'High'
-        elif gp_std < 1.5: stats['grade_stability'] = 'Moderate'
-        else: stats['grade_stability'] = 'Volatile'
-        
-        # 4. Dominant Grade (Mode)
-        try:
-            stats['dominant_grade'] = self.subjects_df['grade'].mode()[0]
-        except:
-            pass
-            
-        stats['grade_points_mean'] = round(gp_mean, 2)
-        stats['grade_points_std'] = round(gp_std, 2)
-        
-        return stats
 
-    def predict_next_sgpa(self) -> Dict:
+    def predict_next_sgpa(self):
         """
-        Predict next semester SGPA using Linear Regression
+        Predict next semester SGPA using Linear Regression on previous semesters.
         """
-        if len(self.df) < 2:
-            return {
-                'predicted_sgpa': None,
-                'confidence': 0,
-                'message': "Need at least 2 semesters of data for prediction"
-            }
+        try:
+            if self.semesters_df.empty or len(self.semesters_df) < 2:
+                return None
+
+            # Prepare data
+            df = self.semesters_df.copy()
+            # Ensure semantic order (1-1, 1-2, 2-1, etc.)
+            df['sem_index'] = (df['year'] - 1) * 2 + df['sem']
+            df = df.sort_values('sem_index')
             
-        # Prepare data
-        # X = Semester index (0, 1, 2...), Y = SGPA
-        X = np.arange(len(self.df)).reshape(-1, 1)
-        y = self.df['sgpa'].values
-        
-        # Train model
-        model = LinearRegression()
-        model.fit(X, y)
-        
-        # Predict next index
-        next_index = np.array([[len(self.df)]])
-        predicted_sgpa = model.predict(next_index)[0]
-        
-        # Clip to valid range 0-10
-        predicted_sgpa = max(0, min(10, predicted_sgpa))
-        
-        # Calculate slope/trend
-        slope = model.coef_[0]
-        
-        return {
-            'predicted_sgpa': round(predicted_sgpa, 2),
-            'slope': round(slope, 3),
-            'trend': 'Increasing' if slope > 0.1 else 'Decreasing' if slope < -0.1 else 'Stable'
-        }
-        
-    def calculate_target_cgpa(self, current_cgpa: float, total_completed_credits: float, 
-                              target_cgpa: float, remaining_semesters: int = 1,
-                              credits_per_sem: int = 21) -> Dict:
+            X = df['sem_index'].values.reshape(-1, 1)
+            y = df['sgpa'].values
+            
+            # Simple Linear Regression
+            model = LinearRegression()
+            model.fit(X, y)
+            
+            next_sem_index = df['sem_index'].max() + 1
+            prediction = model.predict([[next_sem_index]])[0]
+            
+            return round(min(max(prediction, 0.0), 10.0), 2)
+            
+        except Exception as e:
+            print(f"Prediction error: {e}")
+            return None
+
+    def get_insights(self):
         """
-        Calculate required SGPA to achieve target CGPA
-        """
-        future_credits = remaining_semesters * credits_per_sem
-        total_credits = total_completed_credits + future_credits
-        
-        required_total_points = target_cgpa * total_credits
-        current_points = current_cgpa * total_completed_credits
-        
-        needed_points = required_total_points - current_points
-        required_sgpa = needed_points / future_credits
-        
-        achievable = 0 <= required_sgpa <= 10
-        
-        return {
-            'required_sgpa': round(required_sgpa, 2),
-            'achievable': achievable,
-            'message': (f"You need ~{round(required_sgpa, 2)} SGPA in remaining semesters" 
-                        if achievable else "Target is mathematically impossible with standard credits")
-        }
-        
-    def get_insights(self) -> List[Dict]:
-        """
-        Generate heuristic insights based on data
+        Generate text insights based on performance trend.
         """
         insights = []
-        if self.df.empty:
-            return insights
-            
-        # Volatility
-        if len(self.df) >= 3:
-            std_dev = self.df['sgpa'].std()
-            if std_dev > 1.0:
-                insights.append({
-                    'type': 'warning',
-                    'text': f"High volatility detected (Std Dev: {std_dev:.2f}). Performance is inconsistent."
-                })
-            elif std_dev < 0.3:
-                insights.append({
-                    'type': 'success',
-                    'text': "Consistent performance! Your SGPA is very stable."
-                })
+        try:
+            if self.semesters_df.empty:
+                return ["Not enough data for insights."]
                 
-        # Latest Performance
-        if len(self.df) >= 2:
-            latest = self.df.iloc[-1]['sgpa']
-            prev = self.df.iloc[-2]['sgpa']
-            diff = latest - prev
+            df = self.semesters_df.copy()
+            df['sem_index'] = (df['year'] - 1) * 2 + df['sem']
+            df = df.sort_values('sem_index')
             
-            if diff >= 0.5:
-                insights.append({
-                    'type': 'success',
-                    'text': f"Great improvement! SGPA increased by {diff:.2f} compared to last semester."
-                })
-            elif diff <= -0.5:
-                insights.append({
-                    'type': 'error',
-                    'text': f"Performance drop detected. SGPA decreased by {abs(diff):.2f}."
-                })
+            sgpas = df['sgpa'].values
+            if len(sgpas) >= 2:
+                recent = sgpas[-1]
+                prev = sgpas[-2]
+                diff = recent - prev
                 
+                if diff > 0.5:
+                    insights.append(f"Great improvement! Your SGPA jumped by {diff:.2f}.")
+                elif diff < -0.5:
+                    insights.append(f"Your performance dipped by {abs(diff):.2f}. Focus on core subjects next sem.")
+                elif diff > 0:
+                    insights.append("Steady progress. Keep maintaining this consistency.")
+                else:
+                    insights.append("Performance is stable.")
+                    
+            avg_sgpa = sgpas.mean()
+            if avg_sgpa > 8.5:
+                insights.append("You are maintaining a distinction-level average!")
+            elif avg_sgpa < 6.0:
+                insights.append("Consider dedicating more time to fundamentals to boost your average.")
+                
+        except Exception:
+            insights.append("Could not generate detailed insights.")
+            
         return insights
+
+    def analyze_performance(self):
+        """
+        Detailed performance stats for advanced analysis.
+        """
+        stats = {
+            "average_sgpa": 0.0,
+            "best_semester": None,
+            "worst_semester": None,
+            "trend": "Stable"
+        }
+        
+        try:
+            if not self.semesters_df.empty:
+                stats["average_sgpa"] = round(self.semesters_df['sgpa'].mean(), 2)
+                stats["best_semester"] = self.semesters_df.loc[self.semesters_df['sgpa'].idxmax()].to_dict()
+                stats["worst_semester"] = self.semesters_df.loc[self.semesters_df['sgpa'].idxmin()].to_dict()
+                
+                # Trend
+                if len(self.semesters_df) >= 2:
+                    first = self.semesters_df.iloc[0]['sgpa']
+                    last = self.semesters_df.iloc[-1]['sgpa']
+                    if last > first + 0.5: stats['trend'] = 'Rising'
+                    elif last < first - 0.5: stats['trend'] = 'Falling'
+                    
+        except Exception as e:
+            print(f"Analysis error: {e}")
+            
+        return stats

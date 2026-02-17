@@ -31,7 +31,11 @@ const GRADE_DOT_COLORS: Record<string, string> = {
 };
 
 // Custom Tooltip Component
-const CustomTooltip = ({ active, payload }: any) => {
+interface TooltipPayloadEntry {
+    payload: { name: string; code?: string; grade: string; credits: number; total?: number; semesterId: string };
+}
+
+const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: TooltipPayloadEntry[] }) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
         return (
@@ -113,7 +117,7 @@ export default function SubjectInsights() {
     }, [insights.all]);
 
     // State for advanced analysis
-    const [advancedStats, setAdvancedStats] = useState<any>(null);
+    const [advancedStats, setAdvancedStats] = useState<{ consistency_score: number; grade_stability: string; dominant_grade: string } | null>(null);
     const [loadingStats, setLoadingStats] = useState(false);
 
     useEffect(() => {

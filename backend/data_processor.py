@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Constants
 GRADE_POINTS = {
-    'O': 10, 'A+': 9, 'A': 8, 'B+': 7, 'B': 6, 'C': 5, 'F': 0, 'Ab': 0, 'AB': 0, 'ABSENT': 0
+    'O': 10, 'S': 10, 'A+': 9, 'A': 8, 'B+': 7, 'B': 6, 'C': 5, 'D': 4, 'E': 5, 'F': 0, 'Ab': 0, 'AB': 0, 'ABSENT': 0
 }
 
 STANDARD_CREDITS_PER_SEM = 21  # R18 standard, configurable
@@ -113,14 +113,19 @@ class AcademicProcessor:
             lines = section.split('\n')
             for line in lines:
                 # Regex for Subject Line: Code (Alphanumeric) + Name (Text) + Grade (O/A+/F/Ab) + Credits (Number)
-                # Match end of line first: (O|A\+|A|B\+|B|C|F|Ab)\s+(\d+(?:\.\d)?)\s*$
+                # Match end of line first: (O|A\+|A|B\+|B|C|D|E|F|Ab)\s+(\d+(?:\.\d)?)\s*$
                 
-                subject_pattern = r"([A-Z0-9]{4,10})\s+(.+?)\s+(O|A\+|A|B\+|B|C|F|Ab|ABSENT)\s+(\d+(?:\.\d)?)\s*$"
+                subject_pattern = r"([A-Z0-9]{4,10})\s+(.+?)\s+(O|S|A\+|A|B\+|B|C|D|E|F|Ab|ABSENT)\s+(\d+(?:\.\d)?)\s*$"
                 match = re.search(subject_pattern, line, re.IGNORECASE)
                 
                 if match:
                     code, name, grade_str, credits_str = match.groups()
                     grade = self._normalize_grade(grade_str)
+                    credits = float(credits_str)
+                    
+                    # Infer credits if reported as 0 (likely missing data)
+                    if credits <= 0:
+                        credits = self._infer_credits(code.strip(), name.strip(), current_year, current_sem)
                     
                     subjects.append({
                         'year': current_year,
@@ -128,7 +133,7 @@ class AcademicProcessor:
                         'subject_code': code.strip(),
                         'subject_name': name.strip(),
                         'grade': grade,
-                        'credits': float(credits_str),
+                        'credits': credits,
                         'grade_points': GRADE_POINTS.get(grade, 0)
                     })
                     
@@ -154,6 +159,43 @@ class AcademicProcessor:
         if grade in ['AB', 'ABSENT']:
             return 'Ab'
         return grade
+
+    def _infer_credits(self, code: str, name: str, year: int, sem: int) -> float:
+        """Infer credits from subject code/name patterns and semester context."""
+        name_lower = name.lower()
+        code_lower = code.lower()
+        
+        # Audit / Non-credit
+        if any(kw in name_lower for kw in ["audit", "mooc", "non-credit"]):
+            return 0.0
+        # Main project (4-2)
+        if year == 4 and sem == 2 and any(kw in name_lower for kw in ["project work", "main project", "major project", "dissertation"]):
+            return 10.0
+        # Viva (4-2)
+        if year == 4 and sem == 2 and ("viva" in name_lower or "comprehensive" in name_lower):
+            return 2.0
+        # Seminar
+        if "seminar" in name_lower or "colloq" in name_lower:
+            return 2.0
+        # Mini project
+        if "mini project" in name_lower or "mini-project" in name_lower:
+            return 2.0
+        if "project" in name_lower:
+            return 2.0
+        # Labs
+        if code_lower.endswith("l") or "lab" in name_lower or "practical" in name_lower:
+            return 1.5
+        # Workshop / skill
+        if any(kw in name_lower for kw in ["workshop", "skill", "induction"]):
+            return 1.0
+        # Heavy theory (4 credits)
+        if any(kw in name_lower for kw in ["mathematics", "calculus", "statistics", "physics", "chemistry"]):
+            return 4.0
+        # Environmental / Constitution (0 credits in R18+)
+        if any(kw in name_lower for kw in ["environmental", "constitution", "professional ethics"]):
+            return 0.0
+        # Default theory
+        return 3.0
 
     def _update_semester_aggregates(self):
         """

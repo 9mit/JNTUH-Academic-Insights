@@ -66,6 +66,8 @@ export async function uploadPDFs(files: File[]) {
     }
 }
 
+
+
 export async function fetchByHallTicket(htno: string) {
     // Validate hall ticket format
     const cleanHtno = htno.trim().toUpperCase();

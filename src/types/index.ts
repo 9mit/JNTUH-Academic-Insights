@@ -2,7 +2,7 @@
 
 export type Regulation = 'R13' | 'R15' | 'R16' | 'R18' | 'R22' | 'R24';
 
-export type Grade = 'O' | 'A+' | 'A' | 'B+' | 'B' | 'C' | 'F' | 'Ab';
+export type Grade = 'O' | 'A+' | 'A' | 'B+' | 'B' | 'C' | 'D' | 'F' | 'Ab';
 
 export interface Subject {
     id: string;
@@ -77,6 +77,7 @@ export interface GradeDistribution {
     'B+': number;
     B: number;
     C: number;
+    D: number;
     F: number;
     Ab: number;
 }

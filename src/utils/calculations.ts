@@ -113,7 +113,7 @@ export function validateGPA(value: number): boolean {
  */
 export function getGradeDistribution(semesters: Semester[]): GradeDistribution {
     const distribution: GradeDistribution = {
-        'O': 0, 'A+': 0, 'A': 0, 'B+': 0, 'B': 0, 'C': 0, 'F': 0, 'Ab': 0
+        'O': 0, 'A+': 0, 'A': 0, 'B+': 0, 'B': 0, 'C': 0, 'D': 0, 'F': 0, 'Ab': 0
     };
 
     for (const semester of semesters) {
@@ -233,23 +233,51 @@ interface BacklogInfo {
  * Get list of backlog subjects
  */
 export function getBacklogs(semesters: Semester[]): BacklogInfo[] {
-    const backlogs: BacklogInfo[] = [];
+    // Collect every attempt keyed by normalised subject code.
+    // Key: uppercase subject code (or name if code is missing).
+    const attemptsBySubject = new Map<
+        string,
+        { subject: Subject; year: number; sem: number }[]
+    >();
+
+    const FAIL_GRADES: string[] = ['F', 'Ab'];
 
     for (const semester of semesters) {
-        if (semester.mode === 'detailed') {
-            for (const subject of semester.subjects) {
-                if ((subject.grade === 'F' || subject.grade === 'Ab') && subject.credits > 0) {
-                    backlogs.push({
-                        subjectName: subject.name,
-                        subjectCode: subject.code || '',
-                        year: semester.year,
-                        sem: semester.sem,
-                        grade: subject.grade,
-                        credits: subject.credits
-                    });
-                }
+        if (semester.mode !== 'detailed') continue;
+
+        for (const subject of semester.subjects) {
+            const key = (subject.code || subject.name).toUpperCase().trim();
+            if (!attemptsBySubject.has(key)) {
+                attemptsBySubject.set(key, []);
             }
+            attemptsBySubject.get(key)!.push({
+                subject,
+                year: semester.year,
+                sem: semester.sem,
+            });
         }
+    }
+
+    const backlogs: BacklogInfo[] = [];
+
+    for (const [, attempts] of attemptsBySubject) {
+        // Check if the student has ANY passing attempt for this subject.
+        const hasPassingAttempt = attempts.some(
+            (a) => !FAIL_GRADES.includes(a.subject.grade)
+        );
+
+        if (hasPassingAttempt) continue; // Cleared — not a current backlog.
+
+        // Still a backlog — use the earliest failure for display.
+        const earliest = attempts[0];
+        backlogs.push({
+            subjectName: earliest.subject.name,
+            subjectCode: earliest.subject.code || '',
+            year: earliest.year,
+            sem: earliest.sem,
+            grade: earliest.subject.grade,
+            credits: earliest.subject.credits,
+        });
     }
 
     return backlogs;

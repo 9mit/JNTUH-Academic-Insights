@@ -7,10 +7,19 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      '/fetch': 'http://localhost:8000',
-      '/analyze': 'http://localhost:8000',
-      '/predict': 'http://localhost:8000',
-      '/notes': 'http://localhost:8000',
+      '/fetch': 'http://127.0.0.1:8000',
+      '/analyze': 'http://127.0.0.1:8000',
+      '/predict': 'http://127.0.0.1:8000',
+      '/notes': 'http://127.0.0.1:8000',
+    }
+  },
+  preview: {
+    proxy: {
+      '/fetch': 'http://127.0.0.1:8000',
+      '/analyze': 'http://127.0.0.1:8000',
+      '/predict': 'http://127.0.0.1:8000',
+      '/notes': 'http://127.0.0.1:8000',
     }
   }
 })
+

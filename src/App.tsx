@@ -6,21 +6,31 @@ import Dashboard from './components/Dashboard';
 import Predictions from './components/Predictions';
 import PrintableTranscript from './components/PrintableTranscript';
 import HelpGuide from './components/HelpGuide';
-import NotesChatbot from './components/NotesChatbot';
+import NotesHub from './components/NotesHub';
 import type { TabType } from './types';
-import { GraduationCap, LayoutDashboard, Brain, FileText, PenLine, Zap, ChevronRight, HelpCircle, BookOpen } from 'lucide-react';
 import { motion } from 'framer-motion';
+import {
+  LayoutDashboard,
+  GraduationCap,
+  FileText,
+  HelpCircle,
+  PenLine,
+  Zap,
+  ChevronRight,
+  Brain,
+  BookOpen
+} from 'lucide-react';
 
 // Motion Components
-import SmoothScroll from './components/motion/SmoothScroll';
+
 import PageTransition from './components/motion/PageTransition';
 
 const NAV_ITEMS: { id: TabType; label: string; icon: React.ElementType }[] = [
   { id: 'input', label: 'Academic Walkthrough', icon: PenLine },
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'predictions', label: 'Insights', icon: Brain },
-  { id: 'notes', label: 'Notes Hub', icon: BookOpen },
   { id: 'transcript', label: 'Transcript', icon: FileText },
+  { id: 'notes', label: 'Notes', icon: BookOpen },
   { id: 'help', label: 'How to Use', icon: HelpCircle },
 ];
 
@@ -30,7 +40,7 @@ function AppContent() {
   const { cgpa, percentage } = getCGPA();
 
   return (
-    <SmoothScroll>
+    <>
       <div className="min-h-screen flex">
         <aside className="w-72 bg-sidebar border-r border-white/5 flex flex-col fixed h-screen no-print z-50">
           {/* Logo */}
@@ -48,7 +58,7 @@ function AppContent() {
                 <h1 className="text-xl font-black text-white tracking-tight drop-shadow-md">JNTUH</h1>
                 <div className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <p className="text-[10px] font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-cyan-300 uppercase tracking-[0.2em]">Academic Pro</p>
+                  <p className="text-[10px] font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-cyan-300 uppercase tracking-[0.2em]">Academic Analyzer</p>
                 </div>
               </div>
             </div>
@@ -130,7 +140,7 @@ function AppContent() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 ml-72">
+        <main className="flex-1 ml-72 relative">
           {/* Top Bar - Grand Centered Design */}
           <header className="sticky top-0 z-40 bg-black/90 border-b border-white/5 no-print">
             <div className="px-10 py-8 text-center">
@@ -140,9 +150,9 @@ function AppContent() {
               <p className="text-sm text-text-muted mt-2 max-w-md mx-auto">
                 {activeTab === 'dashboard' && 'Track your academic performance'}
                 {activeTab === 'input' && 'Import and manage your results'}
-                {activeTab === 'predictions' && 'AI-powered grade predictions'}
-                {activeTab === 'notes' && 'Download R18 & R22 notes'}
+                {activeTab === 'predictions' && 'Smart grade predictions'}
                 {activeTab === 'transcript' && 'Generate official transcripts'}
+                {activeTab === 'notes' && 'Download study materials'}
                 {activeTab === 'help' && 'Complete walkthrough guide'}
               </p>
             </div>
@@ -154,18 +164,20 @@ function AppContent() {
               {activeTab === 'input' && <InputView />}
               {activeTab === 'dashboard' && <Dashboard />}
               {activeTab === 'predictions' && <Predictions />}
-              {activeTab === 'notes' && <NotesChatbot />}
               {activeTab === 'transcript' && <PrintableTranscript />}
+              {activeTab === 'notes' && <NotesHub />}
               {activeTab === 'help' && <HelpGuide />}
             </PageTransition>
           </div>
+
+
         </main>
       </div>
-    </SmoothScroll>
+    </>
   );
 }
 
-function App() {
+export default function App() {
   return (
     <AcademicProvider>
       <Toaster position="top-right" />
@@ -173,6 +185,3 @@ function App() {
     </AcademicProvider>
   );
 }
-
-export default App;
-

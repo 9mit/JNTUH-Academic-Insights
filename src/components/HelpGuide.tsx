@@ -12,10 +12,7 @@ import {
     Link,
     Printer,
     CheckCircle2,
-    ArrowRight,
-    BookOpen,
-    Cloud,
-    FolderOpen
+    ArrowRight
 } from 'lucide-react';
 
 const fadeIn = {
@@ -53,7 +50,7 @@ const steps = [
     },
     {
         number: '03',
-        title: 'Use AI Insights',
+        title: 'Academic Insights',
         icon: Brain,
         color: 'from-emerald-500 to-teal-500',
         description: 'Get intelligent predictions and analysis:',
@@ -67,19 +64,6 @@ const steps = [
     },
     {
         number: '04',
-        title: 'Download Study Notes',
-        icon: BookOpen,
-        color: 'from-violet-500 to-purple-500',
-        description: 'Access JNTUH CSE notes through our Notes Hub:',
-        options: [
-            { icon: FolderOpen, text: 'R18 & R22 Regulation notes organized by Year → Semester → Subject' },
-            { icon: Cloud, text: 'Google Drive Access: View notes online without downloading', highlight: true },
-            { icon: Download, text: 'Local Downloads: Download PDFs directly from the chatbot' },
-            { icon: Upload, text: 'Contribute Notes: Share your notes to help other students' }
-        ]
-    },
-    {
-        number: '05',
         title: 'Export & Share',
         icon: FileSpreadsheet,
         color: 'from-amber-500 to-orange-500',
@@ -102,7 +86,7 @@ export default function HelpGuide() {
                 </div>
                 <h1 className="text-3xl font-black text-white mb-2">How to Use This App</h1>
                 <p className="text-text-muted max-w-xl mx-auto">
-                    A complete walkthrough to help you get the most out of JNTUH Academic Insights
+                    A complete walkthrough to help you get the most out of JNTUH Academic Analyzer
                 </p>
             </motion.div>
 
@@ -192,7 +176,7 @@ export default function HelpGuide() {
                     </li>
                     <li className="flex items-center gap-2">
                         <ArrowRight className="w-3 h-3 text-emerald-400" />
-                        Import <strong className="text-white">all semesters</strong> to get better AI predictions
+                        Import <strong className="text-white">all semesters</strong> to get better predictions
                     </li>
                     <li className="flex items-center gap-2">
                         <ArrowRight className="w-3 h-3 text-emerald-400" />
@@ -201,10 +185,6 @@ export default function HelpGuide() {
                     <li className="flex items-center gap-2">
                         <ArrowRight className="w-3 h-3 text-emerald-400" />
                         <strong className="text-white">Export to Excel</strong> regularly as a backup of your records
-                    </li>
-                    <li className="flex items-center gap-2">
-                        <ArrowRight className="w-3 h-3 text-emerald-400" />
-                        Visit <strong className="text-white">Notes Hub</strong> for free study materials - contribute your notes to help others!
                     </li>
                 </ul>
             </motion.div>

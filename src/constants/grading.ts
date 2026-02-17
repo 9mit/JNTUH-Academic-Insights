@@ -8,12 +8,13 @@ export const GRADE_POINTS: Record<Grade, number> = {
     'B+': 7,
     'B': 6,
     'C': 5,
+    'D': 4,
     'F': 0,
     'Ab': 0,
 };
 
 // All available grades
-export const GRADES: Grade[] = ['O', 'A+', 'A', 'B+', 'B', 'C', 'F', 'Ab'];
+export const GRADES: Grade[] = ['O', 'A+', 'A', 'B+', 'B', 'C', 'D', 'F', 'Ab'];
 
 // Grade colors for visualization
 export const GRADE_COLORS: Record<Grade, string> = {
@@ -23,6 +24,7 @@ export const GRADE_COLORS: Record<Grade, string> = {
     'B+': '#8b5cf6',
     'B': '#f59e0b',
     'C': '#fb923c',
+    'D': '#f97316',
     'F': '#ef4444',
     'Ab': '#ef4444',
 };
@@ -35,7 +37,7 @@ export const STANDARD_CREDITS = 20;
 export const REGULATION_CREDITS: Record<Regulation, number> = {
     'R13': 216,  // 224 registered, 216 required for degree
     'R15': 200,  // Transition regulation
-    'R16': 180,  // First CBCS regulation
+    'R16': 192,  // Official R16 regulation (192 total credits)
     'R18': 160,  // AICTE model curriculum
     'R22': 160,  // Latest regulation
     'R24': 160,  // Follows R22 pattern

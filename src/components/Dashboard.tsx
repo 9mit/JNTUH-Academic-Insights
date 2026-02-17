@@ -1,4 +1,5 @@
 import { useAcademic } from '../context/AcademicContext';
+import { PerformanceReport } from './PerformanceReport';
 import SGPATrendLine from './charts/SGPATrendLine';
 import YearlyBarChart from './charts/YearlyBarChart';
 import GradeDistribution from './charts/GradeDistribution';
@@ -7,6 +8,7 @@ import SubjectInsights from './charts/SubjectInsights';
 import BacklogsList from './charts/BacklogsList';
 import QuickConverter from './QuickConverter';
 import ActionButtons from './ActionButtons';
+
 import { Award, TrendingUp, BookOpen, Calendar, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -29,9 +31,11 @@ export default function Dashboard() {
     return (
         <div className="space-y-8">
             {/* Action Buttons - Export & Share */}
-            <motion.div {...fadeIn} className="flex justify-end">
+            <motion.div {...fadeIn} className="flex justify-end gap-3">
+                <PerformanceReport />
                 <ActionButtons />
             </motion.div>
+
 
             {/* Bento Grid Layout */}
             <div className="grid grid-cols-12 gap-5">

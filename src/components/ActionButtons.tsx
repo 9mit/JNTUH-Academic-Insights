@@ -17,7 +17,7 @@ export default function ActionButtons() {
                 regulation: data.regulation,
             });
             toast.success('Excel file downloaded!');
-        } catch (error) {
+        } catch {
             toast.error('Failed to export. Please try again.');
         }
     };
@@ -36,7 +36,7 @@ export default function ActionButtons() {
             toast.success('Link copied to clipboard!');
 
             setTimeout(() => setCopied(false), 3000);
-        } catch (error) {
+        } catch {
             toast.error('Failed to generate link.');
         }
     };

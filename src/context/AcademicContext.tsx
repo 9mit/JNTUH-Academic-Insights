@@ -21,6 +21,7 @@ interface AcademicContextType {
     // Bulk actions
     setRegulation: (regulation: Regulation) => void;
     setStudentInfo: (name?: string, hallTicket?: string) => void;
+    updateStudentInfo: (data: { name?: string; hallTicket?: string }) => void;
     setOfficialCGPA: (cgpa: number) => void;
     importSemesters: (semesters: Partial<Semester>[]) => void;
     clearAllData: () => void;
@@ -129,6 +130,10 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
         }));
     }, [setData]);
 
+    const updateStudentInfo = useCallback((info: { name?: string; hallTicket?: string }) => {
+        setStudentInfo(info.name, info.hallTicket);
+    }, [setStudentInfo]);
+
     const importSemesters = useCallback((parsedSemesters: Partial<Semester>[]) => {
         setData(prev => {
             const newSemesters = [...prev.semesters];
@@ -206,6 +211,7 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
         removeSubject,
         setRegulation,
         setStudentInfo,
+        updateStudentInfo,
         setOfficialCGPA,
         importSemesters,
         clearAllData,
@@ -221,6 +227,7 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
         removeSubject,
         setRegulation,
         setStudentInfo,
+        updateStudentInfo,
         setOfficialCGPA,
         importSemesters,
         clearAllData,

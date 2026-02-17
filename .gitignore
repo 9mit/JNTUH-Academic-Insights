@@ -28,11 +28,19 @@ __pycache__/
 .pytest_cache/
 
 # Virtual Environments
-.env
 .venv/
 venv/
 ENV/
 env/
+
+# ======================
+# Environment Variables
+# ======================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # ======================
 # Logs
@@ -49,7 +57,7 @@ lerna-debug.log*
 # IDE & Editors
 # ======================
 .idea/
-# .vscode/ - Keeping for project-specific settings
+# .vscode/ — Keeping for project-specific settings
 *.suo
 *.ntvs*
 *.njsproj
@@ -79,14 +87,14 @@ playwright/.cache/
 test-results/
 
 # ======================
-# Temporary Files
+# Temporary / Cached
 # ======================
-*.local
 .cache/
 tmp/
 temp/
 *.tmp
 *.temp
+temp_*
 
 # ======================
 # Uploaded Files
@@ -95,9 +103,12 @@ uploads/
 uploaded_pdfs/
 
 # ======================
-# Environment Variables
+# Lint Reports
 # ======================
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+eslint-report.json
+
+# ======================
+# Notes (large PDFs, keep tracked separately)
+# ======================
+jntunotes-main/
+JNTUH-CSE-BTech-Notes-R22-main/

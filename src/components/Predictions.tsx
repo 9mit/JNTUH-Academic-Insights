@@ -49,7 +49,7 @@ export default function Predictions() {
 
             try {
                 const result = await predictSGPA(semesterHistory);
-                setApiPrediction(result.prediction);
+                setApiPrediction(result);
             } catch (e) {
                 console.error("API Prediction failed", e);
             }
@@ -88,7 +88,7 @@ export default function Predictions() {
 
     return (
         <div className="space-y-6">
-            {/* AI Prediction Card - Only for non-graduated students */}
+            {/* ML Prediction Card - Only for non-graduated students */}
             {apiPrediction && !isGraduated && (
                 <div className="bg-gradient-to-br from-primary/10 to-bg-card rounded-3xl p-6 border border-primary/20">
                     <div className="flex items-center gap-3 mb-6">
@@ -96,7 +96,7 @@ export default function Predictions() {
                             <Brain className="w-5 h-5 text-white" />
                         </div>
                         <div>
-                            <h2 className="text-lg font-bold text-white">AI Prediction</h2>
+                            <h2 className="text-lg font-bold text-white">ML Prediction</h2>
                             <p className="text-xs text-text-muted">Based on your performance trend</p>
                         </div>
                     </div>
@@ -105,9 +105,9 @@ export default function Predictions() {
                         <div className="bg-black/20 rounded-2xl p-4 border border-white/5">
                             <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1">Next SGPA</p>
                             <p className="text-3xl font-black text-primary">
-                                {typeof apiPrediction === 'number'
-                                    ? apiPrediction.toFixed(2)
-                                    : apiPrediction.predicted_sgpa?.toFixed(2) || '—'}
+                                {apiPrediction.prediction
+                                    ? Number(apiPrediction.prediction).toFixed(2)
+                                    : (apiPrediction.predicted_sgpa?.toFixed(2) || '—')}
                             </p>
                         </div>
                         <div className="bg-black/20 rounded-2xl p-4 border border-white/5">

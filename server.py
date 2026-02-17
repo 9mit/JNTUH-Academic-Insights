@@ -15,6 +15,9 @@ import re
 from backend.data_processor import AcademicProcessor
 from backend.analyzer import AcademicAnalyzer
 
+from sse_starlette.sse import EventSourceResponse
+from typing import Dict, Any
+
 app = FastAPI(title="JNTUH Academic Insights API")
 
 # CORS Configuration - Allow all origins for production
@@ -47,6 +50,8 @@ class AnalysisRequest(BaseModel):
 
 class HallTicketRequest(BaseModel):
     htno: str
+
+
 
 @app.get("/")
 def read_root():
@@ -322,7 +327,8 @@ async def fetch_by_hall_ticket(request: HallTicketRequest):
                     elif field == 'credits':
                         try: 
                             c = float(val)
-                            if 0 <= c <= 10: credits = c
+                            # Only accept positive credits (0 = likely missing data)
+                            if 0 < c <= 10: credits = c
                         except: pass
 
                 # Safety net: If credits still None, try scanning typical columns (6 or 7) for float values
@@ -332,32 +338,16 @@ async def fetch_by_hall_ticket(request: HallTicketRequest):
                         try:
                             val = cells[i].get_text(strip=True)
                             c = float(val)
-                            # Credits are usually {0, 1, 1.5, 2, 3, 4}
-                            if c in [0.0, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0]:
+                            # Credits are usually {1, 1.5, 2, 3, 4, 5} — skip 0
+                            if c in [1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0]:
                                 credits = c
                                 break
                         except: pass
 
-                # Smart credit fallback based on subject type
-                if credits is None:  
-                    name_lower = name.lower() if name else ""
-                    code_lower = code.lower() if code else ""
-                    
-                    # Labs typically have 1-1.5 credits
-                    if "lab" in name_lower or code_lower.endswith("l"):
-                        credits = 1.5
-                    # Workshops and skill courses
-                    elif "workshop" in name_lower or "skill" in name_lower:
-                        credits = 1.0
-                    # Projects
-                    elif "project" in name_lower or "seminar" in name_lower:
-                        credits = 2.0
-                    # Theory subjects with tutorials (usually 4 credits)
-                    elif "mathematics" in name_lower or "calculus" in name_lower or "statistics" in name_lower:
-                        credits = 4.0
-                    # Regular theory subjects (default 3 credits)
-                    else:
-                        credits = 3.0
+                # ── Intelligent Credit Inference ──
+                # Uses subject code, name, year/sem, and regulation context
+                if not credits:  # catches None, 0, 0.0
+                    credits = infer_credits(code, name, min(current_year, 4), current_sem, detected_regulation)
 
                 # Fallback for Grade if not mapped (sometimes header says 'Gr')
                 if not grade:
@@ -376,7 +366,7 @@ async def fetch_by_hall_ticket(request: HallTicketRequest):
                             "subject_code": code,
                             "subject_name": name,
                             "grade": grade,
-                            "credits": credits if credits is not None else 3.0,
+                            "credits": credits if credits else 3.0,
                             "grade_points": get_grade_points(grade, detected_regulation),
                             "year": min(current_year, 4),
                             "sem": current_sem,
@@ -423,6 +413,81 @@ async def fetch_by_hall_ticket(request: HallTicketRequest):
 
 
 
+def infer_credits(code: str, name: str, year: int, sem: int, regulation: str) -> float:
+    """
+    Intelligently infer subject credits when not available from scraping.
+    Uses multiple signals: subject code patterns, name keywords, semester context,
+    and regulation-aware defaults.
+    
+    JNTUH Credit Structure (typical):
+    - Theory: 3 credits (R18/R22/R24), 3-4 credits (R13/R15/R16)
+    - Theory + Tutorial: 4 credits
+    - Lab: 1.5 credits (R18/R22/R24), 2 credits (R13/R15/R16)
+    - Mini Project: 2-3 credits
+    - Major Project/Dissertation: 10 credits (4-2)
+    - Seminar / Colloquium: 2 credits
+    - Workshop / Skill Course: 1-2 credits
+    - Audit Course: 0 credits (non-credit)
+    - Comprehensive Viva: 2 credits (4-2)
+    """
+    name_lower = name.lower().strip() if name else ""
+    code_upper = code.upper().strip() if code else ""
+    code_lower = code.lower().strip() if code else ""
+    
+    is_old_regulation = regulation in ("R13", "R15", "R16")
+    
+    # ── Audit / Non-credit courses ──
+    audit_keywords = ["audit", "mooc", "non-credit", "ncc", "nss", "sports"]
+    if any(kw in name_lower for kw in audit_keywords):
+        return 0.0
+    
+    # ── Main Project / Dissertation (IV Year II Semester) ──
+    project_keywords = ["project work", "project stage", "main project", "major project", 
+                         "dissertation", "industry oriented"]
+    if year == 4 and sem == 2 and any(kw in name_lower for kw in project_keywords):
+        return 10.0
+    
+    # ── Comprehensive Viva (IV Year II Semester) ──
+    if year == 4 and sem == 2 and ("viva" in name_lower or "comprehensive" in name_lower):
+        return 2.0
+    
+    # ── Seminar / Colloquium / Technical Presentation ──
+    if any(kw in name_lower for kw in ["seminar", "colloq", "presentation"]):
+        return 2.0
+    
+    # ── Mini Project / Course Project ──
+    if "mini project" in name_lower or "mini-project" in name_lower or "course project" in name_lower:
+        return 3.0 if is_old_regulation else 2.0
+    # Generic "project" (not main project, not mini project) 
+    if "project" in name_lower:
+        return 2.0
+    
+    # ── Lab courses ──
+    # Subject code ending in 'L' or name containing 'lab' / 'practical' / 'workshop'
+    if (code_lower.endswith("l") and len(code_upper) >= 5) or "lab" in name_lower or "practical" in name_lower:
+        return 2.0 if is_old_regulation else 1.5
+    
+    # ── Workshop / Skill Development ──
+    if any(kw in name_lower for kw in ["workshop", "skill", "induction", "communication"]):
+        return 2.0 if is_old_regulation else 1.0
+    
+    # ── Theory subjects with tutorials (4 credits) ──
+    heavy_theory = ["mathematics", "calculus", "statistics", "probability", "linear algebra",
+                     "discrete math", "numerical", "differential", "transform",
+                     "physics", "chemistry", "engineering mechanics"]
+    if any(kw in name_lower for kw in heavy_theory):
+        return 4.0
+    
+    # ── Environmental Science / Constitution (typically 0 credits in R18+) ──
+    zero_credit_courses = ["environmental", "constitution of india", "professional ethics",
+                            "indian constitution", "gender sensitization", "human values"]
+    if any(kw in name_lower for kw in zero_credit_courses):
+        return 0.0 if not is_old_regulation else 2.0
+    
+    # ── Default: Regular theory subject ──
+    return 3.0
+
+
 def parse_exam_code(exam_code: str) -> dict:
     """Parse exam code to extract year and semester."""
     # Common patterns: "1-1", "1-2", "2-1", etc.
@@ -440,19 +505,23 @@ def detect_regulation(htno: str) -> str:
     """
     Detect JNTUH regulation from hall ticket number.
     Hall ticket format: YYBBBANNNN where YY = admission year
-    R22: 22+, R18: 18-21, R16: 16-17, R13: 13-15
+    R24: 24+, R22: 22-23, R18: 18-21, R16: 16-17, R15: 15, R13: 13-14
     """
     if not htno or len(htno) < 2:
         return "R18"  # Default fallback
     
     try:
         year_prefix = int(htno[:2])
-        if year_prefix >= 22:
+        if year_prefix >= 24:
+            return "R24"
+        elif year_prefix >= 22:
             return "R22"
         elif year_prefix >= 18:
             return "R18"
         elif year_prefix >= 16:
             return "R16"
+        elif year_prefix == 15:
+            return "R15"
         elif year_prefix >= 13:
             return "R13"
         else:
@@ -463,6 +532,11 @@ def detect_regulation(htno: str) -> str:
 
 # Regulation-specific grade point mappings
 GRADE_POINTS_BY_REGULATION = {
+    "R24": {
+        # R24 uses same scale as R22
+        "O": 10, "A+": 9, "A": 8, "B+": 7, "B": 6, "C": 5, "D": 4,
+        "F": 0, "Ab": 0, "-": 0
+    },
     "R22": {
         "O": 10, "A+": 9, "A": 8, "B+": 7, "B": 6, "C": 5, "D": 4,
         "F": 0, "Ab": 0, "-": 0
@@ -473,6 +547,13 @@ GRADE_POINTS_BY_REGULATION = {
     },
     "R16": {
         # R16 uses S grade (10 points) instead of O
+        "S": 10, "A": 9, "B": 8, "C": 7, "D": 6, "E": 5,
+        "O": 10,  # Alias for compatibility
+        "A+": 9, "B+": 8, "C+": 7,  # Some sources use these
+        "F": 0, "Ab": 0, "-": 0
+    },
+    "R15": {
+        # R15 uses same scale as R16
         "S": 10, "A": 9, "B": 8, "C": 7, "D": 6, "E": 5,
         "O": 10,  # Alias for compatibility
         "A+": 9, "B+": 8, "C+": 7,  # Some sources use these
@@ -489,9 +570,11 @@ GRADE_POINTS_BY_REGULATION = {
 
 # Valid grades by regulation (for fallback detection)
 VALID_GRADES_BY_REGULATION = {
+    "R24": ['O', 'A+', 'A', 'B+', 'B', 'C', 'D', 'F', 'Ab'],
     "R22": ['O', 'A+', 'A', 'B+', 'B', 'C', 'D', 'F', 'Ab'],
     "R18": ['O', 'A+', 'A', 'B+', 'B', 'C', 'D', 'F', 'Ab'],
     "R16": ['S', 'A', 'B', 'C', 'D', 'E', 'F', 'Ab', 'O', 'A+', 'B+'],
+    "R15": ['S', 'A', 'B', 'C', 'D', 'E', 'F', 'Ab', 'O', 'A+', 'B+'],
     "R13": ['S', 'A', 'B', 'C', 'D', 'E', 'F', 'Ab', 'O', 'A+', 'B+']
 }
 
@@ -766,6 +849,7 @@ async def upload_note(
     except Exception as e:
         print(f"Error uploading note: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn
