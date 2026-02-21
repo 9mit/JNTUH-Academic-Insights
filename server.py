@@ -662,6 +662,14 @@ async def analyze_advanced(request_data: dict):
         semesters_data = request_data.get('semesters', [])
         subjects_data = request_data.get('subjects', [])
         
+        if not semesters_data or not subjects_data:
+             return {
+                 "success": False,
+                 "message": "Insufficient data for advanced analysis. Please import subjects first.",
+                 "performance": None,
+                 "prediction": None
+             }
+        
         sem_df = pd.DataFrame(semesters_data)
         sub_df = pd.DataFrame(subjects_data)
         

@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Download, ChevronRight, ChevronDown, Folder, FileText, Loader2, AlertTriangle, Upload, CheckCircle, X, Plus } from 'lucide-react';
+import { BookOpen, Download, ChevronRight, ChevronDown, Folder, FileText, Loader2, AlertTriangle, Upload, CheckCircle, X, Plus, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { supabase } from '../lib/supabase';
 
 interface NoteFile {
     name: string;
     filename?: string;
     path: string;
     size: number;
+    url?: string;
 }
 
 interface Subject {
@@ -65,11 +67,68 @@ export default function NotesHub() {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch('/notes/catalog');
-            if (!response.ok) throw new Error('Failed to load notes catalog');
-            const data = await response.json();
-            setCatalog(data);
+            // 1. Fetch Local Catalog (Backend File System)
+            let builtCatalog: NotesCatalog = { regulations: [] };
+            try {
+                const localResponse = await fetch('/notes/catalog');
+                if (localResponse.ok) {
+                    builtCatalog = await localResponse.json();
+                }
+            } catch (err) {
+                console.warn("Could not fetch local notes catalog", err);
+            }
+
+            // 2. Fetch all approved notes from Supabase
+            const { data: notes, error: dbError } = await supabase
+                .from('notes')
+                .select('*')
+                .eq('status', 'approved')
+                .order('created_at', { ascending: false });
+
+            if (dbError) throw dbError;
+
+            // 3. Merge Supabase notes into catalog structure
+            if (notes && notes.length > 0) {
+                // Get or create the special 'Contributed Notes' category
+                let contributedReg = builtCatalog.regulations.find(r => r.name === 'Contributed Notes');
+                if (!contributedReg) {
+                    contributedReg = { name: 'Contributed Notes', path: 'Contributed Notes', files: [] };
+                    builtCatalog.regulations.push(contributedReg);
+                }
+
+                if (!contributedReg.files) contributedReg.files = [];
+
+                notes.forEach((note: any) => {
+                    // Combine subject and regulation for better context in flat list
+                    const displayName = `${note.subject} (${note.regulation})`;
+
+                    const fileObj: NoteFile = {
+                        name: displayName,
+                        filename: note.file_name,
+                        path: note.file_url,
+                        size: note.file_size,
+                        url: note.file_url
+                    };
+
+                    contributedReg.files!.push(fileObj);
+                });
+
+                // Sort all contributed files alphabetically by their display name
+                contributedReg.files.sort((a, b) => a.name.localeCompare(b.name));
+            }
+
+            // Clean up empty arrays
+            builtCatalog.regulations.forEach(reg => {
+                if (reg.years && reg.years.length === 0) delete reg.years;
+                if (reg.files && reg.files.length === 0) delete reg.files;
+            });
+
+            // Sort regulations
+            builtCatalog.regulations.sort((a, b) => b.name.localeCompare(a.name));
+
+            setCatalog(builtCatalog);
         } catch (e: any) {
+            console.error("Fetch catalog error:", e);
             setError(e.message || 'Failed to load notes');
         } finally {
             setLoading(false);
@@ -87,9 +146,23 @@ export default function NotesHub() {
         });
     };
 
-    const handleDownload = (path: string, filename: string) => {
+    const handleDownload = (pathOrUrl: string, filename: string) => {
+        // If it's a Supabase URL, just open it
+        if (pathOrUrl.startsWith('http')) {
+            const link = document.createElement('a');
+            link.href = pathOrUrl;
+            link.download = filename;
+            link.target = '_blank';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            toast.success(`Opening ${filename}`);
+            return;
+        }
+
+        // Fallback for legacy local paths
         const link = document.createElement('a');
-        link.href = `/notes/download?path=${encodeURIComponent(path)}`;
+        link.href = `/notes/download?path=${encodeURIComponent(pathOrUrl)}`;
         link.download = filename;
         link.target = '_blank';
         document.body.appendChild(link);
@@ -110,33 +183,53 @@ export default function NotesHub() {
 
         setIsUploading(true);
         try {
-            const formData = new FormData();
-            formData.append('file', uploadFile);
-            formData.append('regulation', uploadRegulation);
-            formData.append('subject', uploadSubject.trim());
-            if (uploadYear) formData.append('year', uploadYear);
-            if (uploadSemester) formData.append('semester', uploadSemester);
+            const timestamp = new Date().getTime();
+            const safeFileName = uploadFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+            const filePath = `${uploadRegulation}/${timestamp}_${safeFileName}`;
 
-            const response = await fetch('/notes/upload', {
-                method: 'POST',
-                body: formData,
-            });
+            // 1. Upload to Supabase Storage
+            const { error: storageError } = await supabase.storage
+                .from('notes_files')
+                .upload(filePath, uploadFile, {
+                    cacheControl: '3600',
+                    upsert: false
+                });
 
-            if (!response.ok) {
-                const err = await response.json().catch(() => ({ detail: 'Upload failed' }));
-                throw new Error(err.detail || 'Upload failed');
-            }
+            if (storageError) throw storageError;
 
-            toast.success('Notes uploaded successfully! Thank you for contributing 🎉');
+            // 2. Get Public URL
+            const { data: { publicUrl } } = supabase.storage
+                .from('notes_files')
+                .getPublicUrl(filePath);
+
+            // 3. Insert record into Database with status='pending'
+            const { error: dbError } = await supabase
+                .from('notes')
+                .insert([{
+                    regulation: uploadRegulation,
+                    year: uploadYear || null,
+                    semester: uploadSemester || null,
+                    subject: uploadSubject.trim(),
+                    file_name: safeFileName,
+                    file_url: publicUrl,
+                    file_size: uploadFile.size,
+                    status: 'pending' // Note this needs review by admin before appearing!
+                }]);
+
+            if (dbError) throw dbError;
+
+            toast.success('Notes uploaded successfully! They will appear after review. 🎉', { duration: 5000 });
+
             // Reset form
             setUploadFile(null);
             setUploadSubject('');
             setUploadYear('');
             setUploadSemester('');
             if (fileInputRef.current) fileInputRef.current.value = '';
-            // Refresh catalog
-            fetchCatalog();
+
+            // Note: we don't need to rebuild catalog here because we just uploaded a pending document!
         } catch (e: any) {
+            console.error("Upload error:", e);
             toast.error(e.message || 'Upload failed');
         } finally {
             setIsUploading(false);
@@ -370,8 +463,8 @@ export default function NotesHub() {
                                     </motion.button>
                                 </div>
 
-                                <p className="text-xs text-text-muted text-center">
-                                    📝 Uploaded notes go to a review queue before being published.
+                                <p className="text-xs text-emerald-400 text-center font-medium">
+                                    📝 Uploaded notes go to an admin queue and will instantly appear here once approved.
                                 </p>
                             </div>
                         </motion.div>
@@ -399,11 +492,17 @@ export default function NotesHub() {
                             onClick={() => toggleExpand(reg.path)}
                             className="w-full flex items-center gap-4 p-6 hover:bg-white/5 transition-colors"
                         >
-                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
-                                <span className="text-white font-black text-sm">{reg.name}</span>
+                            <div className="w-12 h-12 flex-shrink-0 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                                {reg.name === 'Contributed Notes' ? (
+                                    <Users className="w-5 h-5 text-white" />
+                                ) : (
+                                    <span className="text-white font-black text-sm">{reg.name}</span>
+                                )}
                             </div>
-                            <div className="flex-1 text-left">
-                                <h2 className="text-xl font-bold text-white">{reg.name} Notes</h2>
+                            <div className="flex-1 min-w-0 text-left">
+                                <h2 className="text-xl font-bold text-white truncate">
+                                    {reg.name === 'Contributed Notes' ? reg.name : `${reg.name} Notes`}
+                                </h2>
                                 <p className="text-xs text-text-muted mt-1">
                                     {reg.years
                                         ? `${reg.years.length} year(s) available`
@@ -530,7 +629,7 @@ export default function NotesHub() {
 
             {/* Privacy Notice */}
             <div className="text-center text-xs text-text-muted py-2">
-                📚 All notes are served from your local server. No external downloads.
+                📚 All notes are securely hosted in the cloud and vetted by admins.
             </div>
         </div>
     );

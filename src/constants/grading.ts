@@ -81,15 +81,7 @@ export const toPercentage = (gpa: number): number => {
 };
 
 // Initialize empty semesters
-export const createEmptySemesters = (): Array<{
-    id: string;
-    year: number;
-    sem: number;
-    mode: 'detailed' | 'manual';
-    subjects: never[];
-    manualSGPA: null;
-    isExpanded: boolean;
-}> => {
+export const createEmptySemesters = (): Array<import('../types').Semester> => {
     const semesters = [];
     for (let year = 1; year <= 4; year++) {
         for (let sem = 1; sem <= 2; sem++) {

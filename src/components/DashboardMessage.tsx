@@ -3,6 +3,70 @@ import { motion } from 'framer-motion';
 import { GraduationCap, BookOpen, Quote, Trophy, Sparkles } from 'lucide-react';
 import { useMemo } from 'react';
 
+// Icon helper
+function BriefcaseIcon(props: any) {
+    return (
+        <svg
+            {...props}
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        >
+            <rect width="20" height="14" x="2" y="7" rx="2" ry="2" />
+            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+        </svg>
+    )
+}
+
+// Messages Database
+const MESSAGES = {
+    graduated: [
+        {
+            text: "Welcome back, Engineer! Your journey here is done, but the world is waiting.",
+            author: "JNTUH Alumni",
+            role: "Class of 2023",
+            icon: Trophy,
+            color: "from-amber-500 to-yellow-500"
+        },
+        {
+            text: "The degree is just a piece of paper. The resilience you built here is what matters.",
+            author: "Senior Recruiter",
+            role: "Top MNC",
+            icon: GraduationCap,
+            color: "from-emerald-500 to-teal-500"
+        }
+    ],
+    pursuing: [
+        {
+            text: "Every semester counts. Keep your SGPA high, and the placements will follow.",
+            author: "Placement Coordinator",
+            role: "JNTUH",
+            icon: BriefcaseIcon,
+            color: "from-primary to-cyan-500"
+        },
+        {
+            text: "Consistency beats intensity. Review your subjects daily, not just before exams.",
+            author: "University Gold Medalist",
+            role: "2022 Batch",
+            icon: BookOpen,
+            color: "from-violet-500 to-purple-500"
+        },
+        {
+            text: "Don't stress about one bad grade. Focus on the comeback.",
+            author: "Final Year Senior",
+            role: "CSE Dept",
+            icon: Sparkles,
+            color: "from-rose-500 to-pink-500"
+        }
+    ]
+};
+
 export default function DashboardMessage() {
     const { data, getCGPA } = useAcademic();
     const { totalCredits } = getCGPA();
@@ -19,52 +83,9 @@ export default function DashboardMessage() {
         return 'pursuing';
     }, [data.semesters, totalCredits]);
 
-    // Messages Database
-    const messages = {
-        graduated: [
-            {
-                text: "Welcome back, Engineer! Your journey here is done, but the world is waiting.",
-                author: "JNTUH Alumni",
-                role: "Class of 2023",
-                icon: Trophy,
-                color: "from-amber-500 to-yellow-500"
-            },
-            {
-                text: "The degree is just a piece of paper. The resilience you built here is what matters.",
-                author: "Senior Recruiter",
-                role: "Top MNC",
-                icon: GraduationCap,
-                color: "from-emerald-500 to-teal-500"
-            }
-        ],
-        pursuing: [
-            {
-                text: "Every semester counts. Keep your SGPA high, and the placements will follow.",
-                author: "Placement Coordinator",
-                role: "JNTUH",
-                icon: BriefcaseIcon,
-                color: "from-primary to-cyan-500"
-            },
-            {
-                text: "Consistency beats intensity. Review your subjects daily, not just before exams.",
-                author: "University Gold Medalist",
-                role: "2022 Batch",
-                icon: BookOpen,
-                color: "from-violet-500 to-purple-500"
-            },
-            {
-                text: "Don't stress about one bad grade. Focus on the comeback.",
-                author: "Final Year Senior",
-                role: "CSE Dept",
-                icon: Sparkles,
-                color: "from-rose-500 to-pink-500"
-            }
-        ]
-    };
-
     // Select random message based on status (stable per session ideally, but random fetch is fine for now)
     const message = useMemo(() => {
-        const pool = messages[status];
+        const pool = MESSAGES[status as 'graduated' | 'pursuing'];
         return pool[Math.floor(Math.random() * pool.length)]; // Randomize on mount
     }, [status]);
 
@@ -88,30 +109,11 @@ export default function DashboardMessage() {
                             {message.text}
                         </h3>
                     </div>
-
+                    <p className="text-sm font-medium text-text-muted mt-3 ml-6">
+                        — {message.author}, <span className="opacity-70">{message.role}</span>
+                    </p>
                 </div>
             </div>
         </motion.div>
     );
-}
-
-// Icon helper
-function BriefcaseIcon(props: any) {
-    return (
-        <svg
-            {...props}
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-        >
-            <rect width="20" height="14" x="2" y="7" rx="2" ry="2" />
-            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-        </svg>
-    )
 }

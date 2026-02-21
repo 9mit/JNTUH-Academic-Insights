@@ -138,19 +138,22 @@ export default function Dashboard() {
             </div>
 
             {/* Subject Insights */}
-            <motion.div {...fadeIn} transition={{ delay: 0.65 }} className="col-span-12">
+            {/* Subject Insights */}
+            <motion.div {...fadeIn} transition={{ delay: 0.65 }}>
                 <SubjectInsights />
             </motion.div>
 
-            {/* Backlogs List */}
-            <motion.div {...fadeIn} transition={{ delay: 0.7 }} className="col-span-12 lg:col-span-6">
-                <BacklogsList />
-            </motion.div>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                {/* Backlogs List */}
+                <motion.div {...fadeIn} transition={{ delay: 0.7 }} className="lg:col-span-6">
+                    <BacklogsList />
+                </motion.div>
 
-            {/* Quick Converter */}
-            <motion.div {...fadeIn} transition={{ delay: 0.75 }} className="col-span-12 lg:col-span-6">
-                <QuickConverter />
-            </motion.div>
+                {/* Quick Converter */}
+                <motion.div {...fadeIn} transition={{ delay: 0.75 }} className="lg:col-span-6">
+                    <QuickConverter />
+                </motion.div>
+            </div>
         </div>
     );
 }

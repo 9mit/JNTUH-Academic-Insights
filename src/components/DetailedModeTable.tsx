@@ -37,7 +37,7 @@ export default function DetailedModeTable({ semester }: DetailedModeTableProps) 
                                             onChange={(e) => updateSubject(semester.id, subject.id, { grade: e.target.value as Grade })}
                                             className="bg-bg-primary border border-border rounded-lg px-2 py-1.5 focus:border-primary focus:ring-1 focus:ring-primary/20 w-full font-bold text-center text-xs"
                                         >
-                                            {['O', 'A+', 'A', 'B+', 'B', 'C', 'F', 'Ab'].map(g => (
+                                            {['O', 'A+', 'A', 'B+', 'B', 'C', 'D', 'F', 'Ab'].map(g => (
                                                 <option key={g} value={g}>{g}</option>
                                             ))}
                                         </select>
