@@ -2,6 +2,7 @@ import type { Grade, Regulation } from '../types';
 
 // JNTUH Official Grade Points (10-point scale)
 export const GRADE_POINTS: Record<Grade, number> = {
+    'S': 10,
     'O': 10,
     'A+': 9,
     'A': 8,
@@ -9,15 +10,17 @@ export const GRADE_POINTS: Record<Grade, number> = {
     'B': 6,
     'C': 5,
     'D': 4,
+    'E': 5,
     'F': 0,
     'Ab': 0,
 };
 
 // All available grades
-export const GRADES: Grade[] = ['O', 'A+', 'A', 'B+', 'B', 'C', 'D', 'F', 'Ab'];
+export const GRADES: Grade[] = ['S', 'O', 'A+', 'A', 'B+', 'B', 'C', 'D', 'E', 'F', 'Ab'];
 
 // Grade colors for visualization
 export const GRADE_COLORS: Record<Grade, string> = {
+    'S': '#22c55e',
     'O': '#10b981',
     'A+': '#14b8a6',
     'A': '#3b82f6',
@@ -25,6 +28,7 @@ export const GRADE_COLORS: Record<Grade, string> = {
     'B': '#f59e0b',
     'C': '#fb923c',
     'D': '#f97316',
+    'E': '#facc15',
     'F': '#ef4444',
     'Ab': '#ef4444',
 };

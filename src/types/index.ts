@@ -2,7 +2,7 @@
 
 export type Regulation = 'R13' | 'R15' | 'R16' | 'R18' | 'R22' | 'R24';
 
-export type Grade = 'O' | 'A+' | 'A' | 'B+' | 'B' | 'C' | 'D' | 'F' | 'Ab';
+export type Grade = 'S' | 'O' | 'A+' | 'A' | 'B+' | 'B' | 'C' | 'D' | 'E' | 'F' | 'Ab';
 
 export interface Subject {
     id: string;
@@ -71,6 +71,7 @@ export interface CGPAResult {
 }
 
 export interface GradeDistribution {
+    S: number;
     O: number;
     'A+': number;
     A: number;
@@ -78,6 +79,7 @@ export interface GradeDistribution {
     B: number;
     C: number;
     D: number;
+    E: number;
     F: number;
     Ab: number;
 }

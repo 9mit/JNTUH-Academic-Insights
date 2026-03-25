@@ -112,3 +112,13 @@ eslint-report.json
 # ======================
 jntunotes-main/
 JNTUH-CSE-BTech-Notes-R22-main/
+
+# ======================
+# Agentic AI & Environment
+# ======================
+.gemini/
+brain/
+.agents/
+.agent/
+_agents/
+_agent/

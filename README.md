@@ -41,6 +41,7 @@ A powerful web application for JNTUH students to **track, analyze, and predict**
 - **SGPA Trend Line** — Visual performance trajectory over semesters
 - **Grade Distribution** — O/A+/A/B+/B/C/D breakdown pie chart
 - **Credits Progress** — Track credits earned vs total required
+- **Detailed Marks Display** — Internal, External, and Total marks for each subject in transcript and walkthrough
 - **Backlogs List** — Active backlogs with deduplication (cleared subjects excluded)
 
 ### 🧠 Smart Insights

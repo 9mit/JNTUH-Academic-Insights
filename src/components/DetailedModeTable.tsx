@@ -1,6 +1,7 @@
 import { Trash2, PlusCircle, LayoutGrid, Info } from 'lucide-react';
 import type { Subject, Grade } from '../types';
 import { useAcademic } from '../context/AcademicContext';
+import { GRADES } from '../constants/grading';
 
 interface DetailedModeTableProps {
     semester: {
@@ -20,6 +21,9 @@ export default function DetailedModeTable({ semester }: DetailedModeTableProps) 
                         <thead>
                             <tr className="border-b border-border text-[10px] font-bold text-text-muted uppercase tracking-widest">
                                 <th className="px-3 py-3">Subject Name</th>
+                                <th className="px-3 py-3 text-center w-16">Int</th>
+                                <th className="px-3 py-3 text-center w-16">Ext</th>
+                                <th className="px-3 py-3 text-center w-16">Total</th>
                                 <th className="px-3 py-3 text-center w-24">Grade</th>
                                 <th className="px-3 py-3 text-center w-24">Credits</th>
                                 <th className="px-3 py-3 text-right w-12"></th>
@@ -29,7 +33,23 @@ export default function DetailedModeTable({ semester }: DetailedModeTableProps) 
                             {semester.subjects.map((subject) => (
                                 <tr key={subject.id} className="zebra-row group hover:bg-white/[0.01] transition-colors">
                                     <td className="px-3 py-4">
-                                        <div className="font-semibold text-text-primary">{subject.name}</div>
+                                        <div className="font-semibold text-text-primary">
+                                            {subject.name}
+                                            {subject.credits === 0 && (
+                                                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                                    Non-Credit
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-4 text-center">
+                                        <div className="text-xs font-mono text-text-muted">{subject.internal ?? '—'}</div>
+                                    </td>
+                                    <td className="px-3 py-4 text-center">
+                                        <div className="text-xs font-mono text-text-muted">{subject.external ?? '—'}</div>
+                                    </td>
+                                    <td className="px-3 py-4 text-center">
+                                        <div className="text-xs font-mono font-bold text-primary">{subject.total ?? '—'}</div>
                                     </td>
                                     <td className="px-3 py-4">
                                         <select
@@ -37,7 +57,7 @@ export default function DetailedModeTable({ semester }: DetailedModeTableProps) 
                                             onChange={(e) => updateSubject(semester.id, subject.id, { grade: e.target.value as Grade })}
                                             className="bg-bg-primary border border-border rounded-lg px-2 py-1.5 focus:border-primary focus:ring-1 focus:ring-primary/20 w-full font-bold text-center text-xs"
                                         >
-                                            {['O', 'A+', 'A', 'B+', 'B', 'C', 'D', 'F', 'Ab'].map(g => (
+                                            {GRADES.map(g => (
                                                 <option key={g} value={g}>{g}</option>
                                             ))}
                                         </select>

@@ -2,6 +2,7 @@ import { useAcademic } from '../context/AcademicContext';
 import { motion } from 'framer-motion';
 import { GraduationCap, BookOpen, Quote, Trophy, Sparkles } from 'lucide-react';
 import { useMemo } from 'react';
+import { isGraduated } from '../utils/calculations';
 
 // Icon helper
 function BriefcaseIcon(props: any) {
@@ -68,20 +69,13 @@ const MESSAGES = {
 };
 
 export default function DashboardMessage() {
-    const { data, getCGPA } = useAcademic();
-    const { totalCredits } = getCGPA();
+    const { data } = useAcademic();
 
     // Determine Status
     const status = useMemo(() => {
-        // Simple heuristic: If they have data for Year 4 Sem 2 (id: '4-2') and no active backlogs?
-        // Or just check if total credits > 150 (approx for B.Tech)
-        // Let's use a simpler check: Do they have any subjects in 4-2?
-        const finalSem = data.semesters.find(s => s.id === '4-2');
-        const hasFinalYearData = finalSem ? finalSem.subjects.length > 0 : false;
-
-        if (hasFinalYearData && totalCredits >= 160) return 'graduated';
+        if (isGraduated(data.semesters, data.regulation)) return 'graduated';
         return 'pursuing';
-    }, [data.semesters, totalCredits]);
+    }, [data.semesters, data.regulation]);
 
     // Select random message based on status (stable per session ideally, but random fetch is fine for now)
     const message = useMemo(() => {

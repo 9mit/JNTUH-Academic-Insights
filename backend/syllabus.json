@@ -1,0 +1,83 @@
+{
+  "R24": {
+    "subjects": {
+      "MA101BS": { "name": "Matrices and Calculus", "credits": 4.0 },
+      "CH102BS": { "name": "Engineering Chemistry", "credits": 4.0 },
+      "CS103ES": { "name": "Programming for Problem Solving", "credits": 3.0 },
+      "EN104HS": { "name": "English for Skill Enhancement", "credits": 2.0 },
+      "ME105ES": { "name": "Computer Aided Engineering Graphics", "credits": 1.5 },
+      "CS106ES": { "name": "Programming for Problem Solving Laboratory", "credits": 1.5 },
+      "CH107BS": { "name": "Engineering Chemistry Laboratory", "credits": 1.5 },
+      "EN108HS": { "name": "English Language and Communication Skills Laboratory", "credits": 1.5 },
+      "MC109ES": { "name": "Environmental Science", "credits": 0.0 }
+    }
+  },
+  "R22": {
+    "subjects": {
+      "MA101BS": { "name": "Matrices and Calculus", "credits": 4.0 },
+      "CH102BS": { "name": "Engineering Chemistry", "credits": 4.0 },
+      "CS103ES": { "name": "Programming for Problem Solving", "credits": 3.0 },
+      "EN104HS": { "name": "English for Skill Enhancement", "credits": 2.0 },
+      "ME105ES": { "name": "Computer Aided Engineering Graphics", "credits": 1.5 },
+      "CS106ES": { "name": "Programming for Problem Solving Laboratory", "credits": 1.5 },
+      "CH107BS": { "name": "Engineering Chemistry Laboratory", "credits": 1.5 },
+      "EN108HS": { "name": "English Language and Communication Skills Laboratory", "credits": 1.5 },
+      "MC109ES": { "name": "Environmental Science", "credits": 0.0 },
+      "MA201BS": { "name": "Ordinary Differential Equations and Vector Calculus", "credits": 4.0 },
+      "PH202BS": { "name": "Applied Physics", "credits": 4.0 },
+      "CS203ES": { "name": "Data Structures", "credits": 3.0 },
+      "EE204ES": { "name": "Basic Electrical Engineering", "credits": 2.0 },
+      "ME205ES": { "name": "Computer Aided Engineering Graphics", "credits": 1.5 },
+      "PH206BS": { "name": "Applied Physics Laboratory", "credits": 1.5 },
+      "CS207ES": { "name": "Data Structures Laboratory", "credits": 1.5 },
+      "EE208ES": { "name": "Basic Electrical Engineering Laboratory", "credits": 1.5 },
+      "CS301PC": { "name": "Algorithm Design and Analysis", "credits": 3.0 },
+      "CS302PC": { "name": "Object Oriented Programming through Java", "credits": 3.0 },
+      "CS303PC": { "name": "Computer Organization and Architecture", "credits": 3.0 },
+      "CS304PC": { "name": "Software Engineering", "credits": 3.0 },
+      "CS305PC": { "name": "Operating Systems", "credits": 3.0 },
+      "CS306PC": { "name": "Object Oriented Programming through Java Laboratory", "credits": 1.5 },
+      "CS307PC": { "name": "Operating Systems Laboratory", "credits": 1.5 },
+      "CS308PC": { "name": "Software Engineering Laboratory", "credits": 1.5 },
+      "MC301ES": { "name": "Constitution of India", "credits": 0.0 },
+      "CS401PC": { "name": "Discrete Mathematics", "credits": 3.0 },
+      "CS402PC": { "name": "Business Economics & Financial Analysis", "credits": 3.0 },
+      "CS403PC": { "name": "Computer Networks", "credits": 3.0 },
+      "CS404PC": { "name": "Database Management Systems", "credits": 3.0 },
+      "CS405PC": { "name": "Database Management Systems Laboratory", "credits": 1.5 },
+      "CS406PC": { "name": "Computer Networks Laboratory", "credits": 1.5 },
+      "MC401ES": { "name": "Gender Sensitization Lab", "credits": 0.0 }
+    }
+  },
+  "R18": {
+    "subjects": {
+      "MA101BS": { "name": "Mathematics - I", "credits": 3.0 },
+      "CH102BS": { "name": "Chemistry", "credits": 3.0 },
+      "EE103ES": { "name": "Basic Electrical Engineering", "credits": 3.0 },
+      "ME105ES": { "name": "Engineering Workshop", "credits": 1.5 },
+      "EN105HS": { "name": "English", "credits": 2.0 },
+      "CS103ES": { "name": "Programming for Problem Solving", "credits": 3.0 },
+      "MC109ES": { "name": "Environmental Science", "credits": 0.0 },
+      "CS301PC": { "name": "Data Structures", "credits": 4.0 },
+      "CS302PC": { "name": "Computer Networks", "credits": 4.0 },
+      "CS401PC": { "name": "Database Management Systems", "credits": 4.0 },
+      "MC400": { "name": "Gender Sensitization Lab", "credits": 0.0 }
+    }
+  },
+  "R16": {
+    "subjects": {
+      "MA101BS": { "name": "Mathematics - I", "credits": 4.0 },
+      "CS102ES": { "name": "Computer Programming in C", "credits": 4.0 },
+      "ME103ES": { "name": "Engineering Drawing", "credits": 4.0 },
+      "PH104BS": { "name": "Engineering Physics", "credits": 4.0 },
+      "CH105BS": { "name": "Engineering Chemistry", "credits": 4.0 }
+    }
+  },
+  "R15": {
+    "subjects": {
+      "A10001": { "name": "Mathematics - I", "credits": 4.0 },
+      "A10002": { "name": "Mathematics - II", "credits": 4.0 },
+      "A10501": { "name": "Computer Programming", "credits": 4.0 }
+    }
+  }
+}

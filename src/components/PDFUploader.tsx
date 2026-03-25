@@ -98,7 +98,7 @@ export default function PDFUploader() {
     const [htnoInput, setHtnoInput] = useState('');
 
 
-    const processResults = useCallback((subjects: any[], htno: string, studentName?: string, officialCGPA?: number) => {
+    const processResults = useCallback((subjects: any[], backendSemesters: any[], htno: string, studentName?: string, officialCGPA?: number, detectedRegulation?: Regulation) => {
         // Clear all previous data before importing new results
         clearAllData();
 
@@ -127,6 +127,15 @@ export default function PDFUploader() {
 
         const semestersToImport = Object.entries(semesterMap).map(([key, subjects]) => {
             const [year, sem] = key.split('-').map(Number);
+            const backendSem = backendSemesters?.find((s: any) => s.year === year && s.sem === sem);
+            const hasTrustedOfficialSGPA = subjects.some(
+                (subject: any) => typeof subject.official_sem_sgpa === 'number' && subject.official_sem_sgpa > 0
+            );
+
+            if (!hasTrustedOfficialSGPA && typeof backendSem?.sgpa === 'number' && subjects.length > 0) {
+                subjects[0].official_sem_sgpa = backendSem.sgpa;
+            }
+
             return { id: key, year, sem, subjects, isExpanded: false, mode: 'detailed' as const };
         });
 
@@ -136,28 +145,28 @@ export default function PDFUploader() {
             if (htno) {
                 setStudentInfo(studentName || '', htno);
 
-                // Auto-detect Regulation
-                // Logic: 22 series -> R22, 21-18 -> R18, 16-17 -> R16
-                // This is a heuristic based on JNTUH batches
-                const yearStr = htno.substring(0, 2);
-                if (/^\d+$/.test(yearStr)) {
-                    const year = parseInt(yearStr);
-                    let regulation: Regulation = 'R18'; // Default fallback
+                let regulation: Regulation = detectedRegulation || 'R18';
 
-                    if (year >= 24) regulation = 'R24';
-                    else if (year >= 22) regulation = 'R22';
-                    else if (year >= 18) regulation = 'R18';
-                    else if (year >= 16) regulation = 'R16';
-                    else if (year === 15) regulation = 'R15';
-                    else if (year >= 13) regulation = 'R13';
-
-                    setRegulation(regulation);
-                    toast.success(`Detected Regulation: ${regulation}`, { icon: <Sparkles className="w-4 h-4 text-amber-400" /> });
+                // Fallback Auto-detect if not provided
+                if (!detectedRegulation) {
+                    const yearStr = htno.substring(0, 2);
+                    if (/^\d+$/.test(yearStr)) {
+                        const year = parseInt(yearStr);
+                        if (year >= 24) regulation = 'R24';
+                        else if (year >= 22) regulation = 'R22';
+                        else if (year >= 18) regulation = 'R18';
+                        else if (year >= 16) regulation = 'R16';
+                        else if (year === 15) regulation = 'R15';
+                        else if (year >= 13) regulation = 'R13';
+                    }
                 }
+
+                setRegulation(regulation);
+                toast.success(`Detected Regulation: ${regulation}`, { icon: <Sparkles className="w-4 h-4 text-amber-400" /> });
             }
 
             // Set official CGPA if available
-            if (officialCGPA) {
+            if (typeof officialCGPA === 'number' && officialCGPA > 0) {
                 setOfficialCGPA(officialCGPA);
                 toast.success(`Used Official CGPA: ${officialCGPA}`, { icon: <Zap className="w-4 h-4 text-emerald-400" /> });
             }
@@ -182,7 +191,14 @@ export default function PDFUploader() {
             const response = await uploadPDFs(fileArray);
 
             if (response.success && response.subjects) {
-                processResults(response.subjects, response.htno, response.student_name, response.official_cgpa);
+                processResults(
+                    response.subjects,
+                    response.semesters,
+                    response.htno,
+                    response.student_name,
+                    response.official_cgpa,
+                    response.regulation as Regulation
+                );
             }
         } catch (error: any) {
             toast.error(error.message || 'Import failed');
@@ -202,11 +218,24 @@ export default function PDFUploader() {
             const response = await fetchByHallTicket(htnoInput.trim());
 
             if (response.success && response.subjects) {
-                processResults(response.subjects, response.htno, response.student_name, response.official_cgpa);
+                processResults(
+                    response.subjects,
+                    response.semesters,
+                    response.htno,
+                    response.student_name,
+                    response.official_cgpa,
+                    response.regulation as Regulation
+                );
                 toast.success(`Found ${response.total_subjects} subjects for ${response.student_name || response.htno}!`);
             }
         } catch (error: any) {
-            toast.error(error.message || 'Failed to fetch results');
+            const errorMessage = error?.message || error?.toString() || '';
+            toast.error(errorMessage || 'Failed to fetch results');
+            
+            // Auto-switch to PDF mode if Vercel blocked the scraping
+            if (errorMessage.toLowerCase().includes('pdf upload') || errorMessage.toLowerCase().includes('blocking')) {
+                 setTimeout(() => setMode('pdf'), 1500); // Small delay so they read the toast first
+            }
         } finally {
             setIsProcessing(false);
         }

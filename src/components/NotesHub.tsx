@@ -79,13 +79,20 @@ export default function NotesHub() {
             }
 
             // 2. Fetch all approved notes from Supabase
-            const { data: notes, error: dbError } = await supabase
-                .from('notes')
-                .select('*')
-                .eq('status', 'approved')
-                .order('created_at', { ascending: false });
+            let notes: any[] = [];
+            try {
+                const { data, error: dbError } = await supabase
+                    .from('notes')
+                    .select('*')
+                    .eq('status', 'approved')
+                    .order('created_at', { ascending: false });
 
-            if (dbError) throw dbError;
+                if (dbError) throw dbError;
+                if (data) notes = data;
+            } catch (err: any) {
+                console.warn("Supabase fetch failed. Please check VITE_SUPABASE_URL in .env.", err);
+                // We don't throw here so the local catalog can still display if it existed, and the page doesn't crash.
+            }
 
             // 3. Merge Supabase notes into catalog structure
             if (notes && notes.length > 0) {
@@ -230,7 +237,11 @@ export default function NotesHub() {
             // Note: we don't need to rebuild catalog here because we just uploaded a pending document!
         } catch (e: any) {
             console.error("Upload error:", e);
-            toast.error(e.message || 'Upload failed');
+            if (e?.message === 'Failed to fetch' || e?.toString().includes('fetch')) {
+                 toast.error('Database connection failed. Please add a valid VITE_SUPABASE_URL to your .env file.', { duration: 6000 });
+            } else {
+                 toast.error(e.message || 'Upload failed');
+            }
         } finally {
             setIsUploading(false);
         }

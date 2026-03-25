@@ -1,5 +1,68 @@
-import type { Subject, Semester, CalculationResult, CGPAResult, GradeDistribution, YearlyAverage } from '../types';
-import { GRADE_POINTS, toPercentage } from '../constants/grading';
+import type { Subject, Semester, CalculationResult, CGPAResult, GradeDistribution, YearlyAverage, Regulation } from '../types';
+import { GRADE_POINTS, toPercentage, REGULATION_CREDITS } from '../constants/grading';
+
+/**
+ * Normalizes subject identifier to heavily reduce duplicate tracking issues.
+ */
+export function getSubjectKey(subject: Subject): string {
+    const rawCode = subject.code ? subject.code.toUpperCase() : '';
+    if (rawCode && rawCode.length > 2) {
+        return rawCode.replace(/[^A-Z0-9]/g, '');
+    }
+    return subject.name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+export function isMeaningfulSubject(subject: Subject): boolean {
+    const code = subject.code?.trim().toUpperCase() ?? '';
+    const name = subject.name.trim().toUpperCase();
+
+    if (!code && !name) {
+        return false;
+    }
+
+    if (code === 'SUBJECTCODE' || code === 'SUBJECT CODE' || code === 'CODE') {
+        return false;
+    }
+
+    if (name === 'SUBJECT NAME' || name === 'NAME') {
+        return false;
+    }
+
+    return Number.isFinite(subject.credits) && subject.credits >= 0;
+}
+
+export function getBestSubjects(subjects: Subject[]): Subject[] {
+    const bestMap = new Map<string, Subject>();
+
+    for (const subject of subjects) {
+        if (!isMeaningfulSubject(subject)) {
+            continue;
+        }
+
+        const key = getSubjectKey(subject);
+        const existing = bestMap.get(key);
+        if (!existing) {
+            bestMap.set(key, subject);
+            continue;
+        }
+
+        const currGP = GRADE_POINTS[subject.grade] ?? 0;
+        const prevGP = GRADE_POINTS[existing.grade] ?? 0;
+        if (currGP > prevGP || (existing.grade === 'Ab' && subject.grade === 'F')) {
+            bestMap.set(key, subject);
+        }
+    }
+
+    return Array.from(bestMap.values());
+}
+
+export function hasSemesterData(semester: Semester): boolean {
+    if (semester.mode === 'manual') {
+        return semester.manualSGPA !== null;
+    }
+
+    return getBestSubjects(semester.subjects).length > 0;
+}
 
 /**
  * Calculate SGPA for a set of subjects
@@ -7,8 +70,9 @@ import { GRADE_POINTS, toPercentage } from '../constants/grading';
  * Note: 0-credit subjects (mandatory courses) are excluded from calculation
  */
 export function calculateSGPA(subjects: Subject[]): CalculationResult {
-    // Filter out 0-credit subjects (mandatory courses like Environmental Science, Constitution of India)
-    const creditSubjects = subjects.filter(s => s.credits > 0);
+    // Deduplicate to find best attempt for calculation (handles multiple attempts in same semester)
+    const bestSubjects = getBestSubjects(subjects);
+    const creditSubjects = bestSubjects.filter(s => s.credits > 0);
 
     if (creditSubjects.length === 0) {
         return { sgpa: 0, totalCredits: 0, earnedCredits: 0, lostCredits: 0 };
@@ -50,7 +114,9 @@ export function getSemesterSGPA(semester: Semester): number {
     }
 
     // Detailed mode: prefer official SGPA if available
-    const officialSubject = semester.subjects.find(s => s.official_sem_sgpa !== undefined && s.official_sem_sgpa > 0);
+    const officialSubject = getBestSubjects(semester.subjects).find(
+        s => s.official_sem_sgpa !== undefined && s.official_sem_sgpa > 0
+    );
     if (officialSubject?.official_sem_sgpa) {
         return officialSubject.official_sem_sgpa;
     }
@@ -75,10 +141,7 @@ export function getSemesterCredits(semester: Semester): number {
  * Formula: Sum(semesterCredits * semesterSGPA) / Sum(totalCredits)
  */
 export function calculateCGPA(semesters: Semester[]): CGPAResult {
-    const validSemesters = semesters.filter(sem => {
-        if (sem.mode === 'manual') return (sem.manualSGPA ?? 0) > 0;
-        return sem.subjects.length > 0 && getSemesterSGPA(sem) > 0;
-    });
+    const validSemesters = semesters.filter(sem => hasSemesterData(sem) && getSemesterCredits(sem) > 0);
 
     if (validSemesters.length === 0) {
         return { cgpa: 0, isWeighted: true, totalCredits: 0, percentage: 0 };
@@ -102,6 +165,23 @@ export function calculateCGPA(semesters: Semester[]): CGPAResult {
 }
 
 /**
+ * Check if a student is graduated based on their performance
+ */
+export function isGraduated(semesters: Semester[], regulation: Regulation = 'R18'): boolean {
+    const { earned } = getCreditsStats(semesters);
+    const required = REGULATION_CREDITS[regulation] ?? 160;
+    
+    const allSemesters = semesters.length >= 8;
+    const backlogs = getBacklogs(semesters);
+    
+    // Direct credit match or clear pass of all 8 semesters
+    if (earned >= required) return true;
+    if (allSemesters && backlogs.length === 0 && earned >= required * 0.95) return true;
+    
+    return false;
+}
+
+/**
  * Validate SGPA/CGPA input
  */
 export function validateGPA(value: number): boolean {
@@ -113,12 +193,12 @@ export function validateGPA(value: number): boolean {
  */
 export function getGradeDistribution(semesters: Semester[]): GradeDistribution {
     const distribution: GradeDistribution = {
-        'O': 0, 'A+': 0, 'A': 0, 'B+': 0, 'B': 0, 'C': 0, 'D': 0, 'F': 0, 'Ab': 0
+        'S': 0, 'O': 0, 'A+': 0, 'A': 0, 'B+': 0, 'B': 0, 'C': 0, 'D': 0, 'E': 0, 'F': 0, 'Ab': 0
     };
 
     for (const semester of semesters) {
         if (semester.mode === 'detailed') {
-            for (const subject of semester.subjects) {
+            for (const subject of getBestSubjects(semester.subjects)) {
                 if (subject.grade && subject.credits > 0) {
                     distribution[subject.grade]++;
                 }
@@ -139,7 +219,7 @@ export function getYearlyAverages(semesters: Semester[]): YearlyAverage[] {
         const sgpa = getSemesterSGPA(semester);
         const credits = getSemesterCredits(semester);
 
-        if (sgpa > 0) {
+        if (hasSemesterData(semester) && credits > 0) {
             if (!yearlyData[semester.year]) {
                 yearlyData[semester.year] = { sum: 0, credits: 0, semesters: 0 };
             }
@@ -246,7 +326,10 @@ export function getBacklogs(semesters: Semester[]): BacklogInfo[] {
         if (semester.mode !== 'detailed') continue;
 
         for (const subject of semester.subjects) {
-            const key = (subject.code || subject.name).toUpperCase().trim();
+            if (!isMeaningfulSubject(subject)) {
+                continue;
+            }
+            const key = getSubjectKey(subject);
             if (!attemptsBySubject.has(key)) {
                 attemptsBySubject.set(key, []);
             }
@@ -281,4 +364,54 @@ export function getBacklogs(semesters: Semester[]): BacklogInfo[] {
     }
 
     return backlogs;
+}
+
+/**
+ * Get the count of distinct semesters with actual data
+ */
+export function getCompletedSemesterCount(semesters: Semester[]): number {
+    return semesters.filter(sem => hasSemesterData(sem)).length;
+}
+
+/**
+ * Determine student's graduation status
+ * Returns: "graduated" | "graduated_with_backlogs" | "studying"
+ */
+export function getStudentStatus(semesters: Semester[], _regulation: Regulation = 'R18'): 'graduated' | 'graduated_with_backlogs' | 'studying' {
+    const completedCount = getCompletedSemesterCount(semesters);
+    const backlogs = getBacklogs(semesters);
+    const hasAllEightSemesters = completedCount >= 8;
+
+    // Check if student has completed all 8 semesters
+    if (hasAllEightSemesters) {
+        // Has all semesters but with active backlogs
+        if (backlogs.length > 0) {
+            return 'graduated_with_backlogs';
+        }
+        // Has all semesters and no backlogs
+        return 'graduated';
+    }
+
+    // Still studying (has data but not all 8 semesters yet)
+    return 'studying';
+}
+
+/**
+ * Get display string for student status with details
+ */
+export function getStatusLabel(semesters: Semester[], _regulation: Regulation = 'R18'): string {
+    const status = getStudentStatus(semesters, _regulation);
+    const completedCount = getCompletedSemesterCount(semesters);
+    const backlogs = getBacklogs(semesters);
+
+    switch (status) {
+        case 'graduated':
+            return `✓ Graduated (${completedCount}/8 semesters, No Backlogs)`;
+        case 'graduated_with_backlogs':
+            return `✓ Graduated with ${backlogs.length} Backlog(s) (${completedCount}/8 semesters)`;
+        case 'studying':
+            return `→ Currently Studying (${completedCount}/8 semesters)`;
+        default:
+            return 'Status Unknown';
+    }
 }

@@ -4,28 +4,33 @@ import { GRADE_POINTS } from '../../constants/grading';
 import { motion } from 'framer-motion';
 import { TrendingUp, AlertCircle, Star, Activity, Target, Zap, BarChart3 } from 'lucide-react';
 import type { Subject } from '../../types';
+import { getBestSubjects } from '../../utils/calculations';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 // Grade to numeric value for X-axis
 const GRADE_X_VALUES: Record<string, number> = {
+    'S': 10,
     'O': 10,
     'A+': 9,
     'A': 8,
     'B+': 7,
     'B': 6,
     'C': 5,
+    'E': 5,
     'F': 0,
     'Ab': 0,
 };
 
 // Grade colors for scatter dots
 const GRADE_DOT_COLORS: Record<string, string> = {
+    'S': '#22c55e',
     'O': '#10b981',
     'A+': '#14b8a6',
     'A': '#3b82f6',
     'B+': '#8b5cf6',
     'B': '#f59e0b',
     'C': '#fb923c',
+    'E': '#facc15',
     'F': '#ef4444',
     'Ab': '#ef4444',
 };
@@ -80,7 +85,7 @@ export default function SubjectInsights() {
         const allSubjects: (Subject & { semesterId: string })[] = [];
 
         data.semesters.forEach(sem => {
-            sem.subjects.forEach(sub => {
+            getBestSubjects(sem.subjects).forEach(sub => {
                 // Filter out 0-credit mandatory courses (Environmental Science, Constitution of India, etc.)
                 // These don't affect CGPA and shouldn't be displayed in performance analysis
                 if (sub.grade && sub.name && sub.name !== "Subject Name" && sub.credits > 0) {
@@ -95,9 +100,9 @@ export default function SubjectInsights() {
             return gpB - gpA;
         });
 
-        const strengths = sorted.filter(s => ['O', 'A+'].includes(s.grade));
+        const strengths = sorted.filter(s => ['S', 'O', 'A+'].includes(s.grade));
         const average = sorted.filter(s => ['A', 'B+'].includes(s.grade));
-        const weak = sorted.filter(s => ['B', 'C', 'F', 'Ab'].includes(s.grade));
+        const weak = sorted.filter(s => ['B', 'C', 'D', 'E', 'F', 'Ab'].includes(s.grade));
 
         return { all: sorted, strengths, average, weak };
     }, [data]);
@@ -154,7 +159,7 @@ export default function SubjectInsights() {
     if (insights.all.length === 0) return null;
 
     const getGradeBgColor = (grade: string) => {
-        if (['O', 'A+'].includes(grade)) return 'bg-emerald-500/20 text-emerald-300';
+        if (['S', 'O', 'A+'].includes(grade)) return 'bg-emerald-500/20 text-emerald-300';
         if (['A', 'B+'].includes(grade)) return 'bg-amber-500/20 text-amber-300';
         return 'bg-rose-500/20 text-rose-300';
     };
@@ -247,7 +252,7 @@ export default function SubjectInsights() {
                                 domain={[0, 10]}
                                 ticks={[0, 5, 6, 7, 8, 9, 10]}
                                 tickFormatter={(val) => {
-                                    const labels: Record<number, string> = { 0: 'F', 5: 'C', 6: 'B', 7: 'B+', 8: 'A', 9: 'A+', 10: 'O' };
+                                    const labels: Record<number, string> = { 0: 'F', 5: 'C/E', 6: 'B', 7: 'B+', 8: 'A', 9: 'A+', 10: 'S/O' };
                                     return labels[val] || val.toString();
                                 }}
                                 stroke="#666"

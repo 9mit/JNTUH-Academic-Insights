@@ -9,7 +9,7 @@ import {
     Line,
 } from 'recharts';
 import { useAcademic } from '../../context/AcademicContext';
-import { getSemesterSGPA } from '../../utils/calculations';
+import { getSemesterSGPA, hasSemesterData } from '../../utils/calculations';
 import { getSemesterShortLabel } from '../../constants/grading';
 
 export default function SGPATrendLine() {
@@ -26,8 +26,7 @@ export default function SGPATrendLine() {
         .filter(item => {
             const sem = data.semesters.find(s => s.year === item.year && s.sem === item.sem);
             if (!sem) return false;
-            return (sem.mode === 'detailed' && sem.subjects.length > 0) ||
-                (sem.mode === 'manual' && (sem.manualSGPA ?? -1) >= 0);
+            return hasSemesterData(sem);
         });
 
     if (chartData.length === 0) {

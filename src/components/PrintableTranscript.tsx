@@ -1,19 +1,26 @@
 import { useAcademic } from '../context/AcademicContext';
-import { getSemesterSGPA, calculateCGPA } from '../utils/calculations';
+import { getSemesterSGPA, hasSemesterData } from '../utils/calculations';
 import { Printer } from 'lucide-react';
 
 export default function PrintableTranscript() {
-    const { data } = useAcademic();
-    const cgpaResult = calculateCGPA(data.semesters);
+    const { data, getCGPA } = useAcademic();
+    const cgpaResult = getCGPA();
 
-    const semestersWithData = data.semesters.filter(sem => {
-        if (sem.mode === 'manual') return (sem.manualSGPA ?? 0) > 0;
-        return sem.subjects.length > 0;
-    });
+    const semestersWithData = data.semesters.filter(hasSemesterData);
 
     const handlePrint = () => {
         window.print();
     };
+
+    if (semestersWithData.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-4 border-2 border-dashed border-white/10 rounded-3xl mt-8">
+                <Printer className="w-12 h-12 text-text-muted mb-4 opacity-50" />
+                <h2 className="text-2xl font-bold text-white mb-2">No Transcript Available</h2>
+                <p className="text-text-muted max-w-sm mx-auto">Upload your academic results first to generate a comprehensive, printable transcript.</p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -28,13 +35,26 @@ export default function PrintableTranscript() {
             {/* Printable Content - Clean White Theme for Print */}
             <div className="bg-white text-black p-8 rounded-2xl shadow-lg print:shadow-none print:p-4">
                 {/* Header */}
-                <div className="text-center mb-6 pb-4 border-b-2 border-gray-300">
-                    <h1 className="text-2xl font-bold text-gray-900 mb-1">
-                        Academic Transcript
-                    </h1>
-                    <p className="text-gray-600 text-sm">
-                        JNTUH - Jawaharlal Nehru Technological University Hyderabad
-                    </p>
+                <div className="text-center mb-6 pb-4 border-b-2 border-gray-300 flex items-center justify-center gap-6">
+                    <img 
+                        src="https://upload.wikimedia.org/wikipedia/en/thumb/c/ca/Jawaharlal_Nehru_Technological_University%2C_Hyderabad_logo.png/220px-Jawaharlal_Nehru_Technological_University%2C_Hyderabad_logo.png" 
+                        alt="JNTUH Logo" 
+                        className="w-20 h-20 object-contain mix-blend-multiply"
+                        onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                        }}
+                    />
+                    <div>
+                        <h1 className="text-3xl font-bold text-gray-900 mb-1 leading-tight">
+                            JAWAHARLAL NEHRU TECHNOLOGICAL UNIVERSITY HYDERABAD
+                        </h1>
+                        <p className="text-gray-700 font-semibold tracking-wide">
+                            Kukatpally, Hyderabad - 500 085, Telangana, India
+                        </p>
+                        <p className="text-gray-500 text-sm mt-1 uppercase tracking-widest font-bold">
+                            Academic Transcript Summary
+                        </p>
+                    </div>
                 </div>
 
                 {/* Student Info Row */}
@@ -119,7 +139,7 @@ export default function PrintableTranscript() {
                                                 </td>
                                                 <td className={`border border-gray-400 py-2 px-3 text-center font-bold ${subject.grade === 'F' || subject.grade === 'Ab'
                                                     ? 'text-red-600'
-                                                    : subject.grade === 'O' || subject.grade === 'A+'
+                                                    : subject.grade === 'S' || subject.grade === 'O' || subject.grade === 'A+'
                                                         ? 'text-green-600'
                                                         : 'text-gray-800'
                                                     }`}>

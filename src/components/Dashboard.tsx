@@ -8,6 +8,8 @@ import SubjectInsights from './charts/SubjectInsights';
 import BacklogsList from './charts/BacklogsList';
 import QuickConverter from './QuickConverter';
 import ActionButtons from './ActionButtons';
+import StudentStatusCard from './StudentStatusCard';
+import { hasSemesterData } from '../utils/calculations';
 
 import { Award, TrendingUp, BookOpen, Calendar, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -23,10 +25,23 @@ export default function Dashboard() {
     const { getCGPA, data } = useAcademic();
     const { cgpa, percentage, totalCredits } = getCGPA();
 
-    const semestersWithData = data.semesters.filter(sem => {
-        if (sem.mode === 'manual') return (sem.manualSGPA ?? 0) > 0;
-        return sem.subjects.length > 0;
-    }).length;
+    const semestersWithData = data.semesters.filter(hasSemesterData).length;
+
+    if (semestersWithData === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+                <motion.div {...fadeIn} className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary/20 to-cyan-500/20 flex items-center justify-center mb-6 border border-primary/30 shadow-2xl shadow-primary/20">
+                    <Sparkles className="w-12 h-12 text-primary" />
+                </motion.div>
+                <motion.h2 {...fadeIn} transition={{ delay: 0.1 }} className="text-4xl font-black text-white mb-4 tracking-tight">
+                    Start Your Analysis
+                </motion.h2>
+                <motion.p {...fadeIn} transition={{ delay: 0.2 }} className="text-text-muted max-w-md text-lg mb-8 mx-auto leading-relaxed">
+                    It looks like you haven't uploaded any results yet. Please upload your Result PDFs or use the Auto-Fetch tool to unlock visual insights, SGPA trends, and backlog tracking!
+                </motion.p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-8">
@@ -36,6 +51,8 @@ export default function Dashboard() {
                 <ActionButtons />
             </motion.div>
 
+            {/* Student Status Card */}
+            <StudentStatusCard />
 
             {/* Bento Grid Layout */}
             <div className="grid grid-cols-12 gap-5">

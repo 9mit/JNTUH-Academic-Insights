@@ -1,26 +1,96 @@
+import asyncio
+import io
+import json
+import logging
+import re
+import requests
+import shutil
+import time
+from contextlib import asynccontextmanager
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from typing import List, Optional, Dict, Any
+
+import pandas as pd
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-from typing import List, Optional
-from pathlib import Path
-import io
-import pandas as pd
-import asyncio
-import shutil
-import time
-import os
-import re
+from pydantic import BaseModel, Field
+
 from backend.data_processor import AcademicProcessor
 from backend.analyzer import AcademicAnalyzer
+from backend.shared import (
+    GRADE_POINTS_BY_REGULATION,
+    VALID_GRADES_BY_REGULATION,
+    detect_regulation,
+    get_grade_points,
+)
 
-from sse_starlette.sse import EventSourceResponse
-from typing import Dict, Any
+# Removed Playwright Imports
 
-app = FastAPI(title="JNTUH Academic Insights API")
+# ==========================================
+# CONFIGURATION & LOGGING
+# ==========================================
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+logger = logging.getLogger("jntuh_api")
 
-# CORS Configuration - Allow all origins for production
+BASE_DIR = Path(__file__).parent
+DIST_PATH = BASE_DIR / "dist"
+SYLLABUS_PATH = BASE_DIR / "backend" / "syllabus.json"
+
+# Notes Directories
+NOTES_BASE_PATH = BASE_DIR
+R18_NOTES_PATH = NOTES_BASE_PATH / "jntunotes-main" / "jntunotes-main"
+R22_NOTES_PATH = NOTES_BASE_PATH / "JNTUH-CSE-BTech-Notes-R22-main" / "JNTUH-CSE-BTech-Notes-R22-main"
+UPLOAD_DIR = Path("uploads/pending_notes")
+
+# Globals
+SYLLABUS_DATA: Dict[str, Any] = {}
+BROWSER_SEMAPHORE: Optional[asyncio.Semaphore] = None
+THREAD_POOL: Optional[ThreadPoolExecutor] = None
+
+
+# ==========================================
+# LIFESPAN & APP INIT
+# ==========================================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Modern FastAPI lifecycle manager for startup/shutdown events."""
+    global SYLLABUS_DATA, BROWSER_SEMAPHORE, THREAD_POOL
+    
+    # Load Syllabus
+    if SYLLABUS_PATH.exists():
+        try:
+            with open(SYLLABUS_PATH, "r", encoding="utf-8") as f:
+                SYLLABUS_DATA = json.load(f)
+            logger.info("Successfully loaded syllabus.json")
+        except Exception as e:
+            logger.error(f"Could not load syllabus.json: {e}")
+    else:
+        logger.warning(f"Syllabus file not found at {SYLLABUS_PATH}")
+
+    # Initialize Concurrency Limits globally
+    BROWSER_SEMAPHORE = asyncio.Semaphore(3)
+    THREAD_POOL = ThreadPoolExecutor(max_workers=3)
+    
+    # Ensure upload dir exists
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+    logger.info("Application startup complete. Lifespan triggered successfully.")
+    
+    yield  # App runs here
+
+    # Cleanup
+    if THREAD_POOL:
+        THREAD_POOL.shutdown(wait=False)
+    logger.info("Application shutdown complete.")
+
+app = FastAPI(title="JNTUH Academic Insights API", lifespan=lifespan)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -29,12 +99,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve static files from dist folder (built React app)
-DIST_PATH = Path(__file__).parent / "dist"
 if DIST_PATH.exists():
     app.mount("/assets", StaticFiles(directory=DIST_PATH / "assets"), name="assets")
 
-# Models
+# ==========================================
+# PYDANTIC MODELS
+# ==========================================
 class Subject(BaseModel):
     subject_code: str
     subject_name: str
@@ -45,778 +115,392 @@ class Subject(BaseModel):
     sem: int
     htno: Optional[str] = None
 
-class AnalysisRequest(BaseModel):
-    semesters: List[dict]
-
 class HallTicketRequest(BaseModel):
-    htno: str
+    htno: str = Field(..., min_length=10, max_length=10, description="10-character Hall Ticket Number")
 
-
-
-@app.get("/")
-def read_root():
-    """Serve React app or API message"""
-    index_file = DIST_PATH / "index.html"
-    if index_file.exists():
-        return HTMLResponse(content=index_file.read_text(), status_code=200)
-    return {"message": "JNTUH Academic Insights API is running"}
-@app.post("/fetch/htno")
-async def fetch_by_hall_ticket(request: HallTicketRequest):
-    """
-    Fetches academic results using Playwright browser automation.
-    Falls back to Selenium ChromeDriver if Playwright fails.
-    Includes concurrency limiting (max 3 browsers) to support 500+ req/day safely.
-    """
-    import concurrent.futures
-    from bs4 import BeautifulSoup
-    import asyncio
-    
-    # Global semaphore to limit concurrent browser instances
-    if not hasattr(app.state, 'browser_semaphore'):
-        app.state.browser_semaphore = asyncio.Semaphore(3)
-
-    htno = request.htno.strip().upper().replace(" ", "")
-    
-    if len(htno) < 10:
-        raise HTTPException(status_code=400, detail="Invalid hall ticket number format. Must be 10 characters.")
-    
-    def scrape_with_playwright(hall_ticket: str):
-        """Use Playwright to render JavaScript and get the full HTML"""
-        from playwright.sync_api import sync_playwright
-        
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            
-            try:
-                url = f"https://jntuhresults.vercel.app/academicresult/result?htno={hall_ticket}"
-                page.goto(url, timeout=60000)
-                page.wait_for_load_state("networkidle", timeout=30000)
-                page.wait_for_timeout(5000)
-                html_content = page.content()
-                browser.close()
-                return html_content
-            except Exception as e:
-                browser.close()
-                raise e
-    
-    def scrape_with_selenium(hall_ticket: str):
-        """Fallback: Use Selenium ChromeDriver to render JavaScript"""
-        from selenium import webdriver
-        from selenium.webdriver.chrome.service import Service
-        from selenium.webdriver.chrome.options import Options
-        from selenium.webdriver.support.ui import WebDriverWait
-        from selenium.webdriver.support import expected_conditions as EC
-        from selenium.webdriver.common.by import By
-        from webdriver_manager.chrome import ChromeDriverManager
-        
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--window-size=1920,1080")
-        
-        driver = None
-        try:
-            service = Service(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=chrome_options)
-            
-            url = f"https://jntuhresults.vercel.app/academicresult/result?htno={hall_ticket}"
-            driver.get(url)
-            
-            # Wait for page to load
-            WebDriverWait(driver, 30).until(
-                EC.presence_of_element_located((By.TAG_NAME, "table"))
-            )
-            
-            # Additional wait for React rendering
-            import time
-            time.sleep(5)
-            
-            html_content = driver.page_source
-            return html_content
-        finally:
-            if driver:
-                driver.quit()
-    
-    try:
-        async with app.state.browser_semaphore:
-            loop = asyncio.get_event_loop()
-            html_content = None
-            
-            # Try Playwright first
-            try:
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    html_content = await loop.run_in_executor(executor, scrape_with_playwright, htno)
-                print(f"[INFO] Playwright succeeded for {htno}")
-            except Exception as pw_error:
-                print(f"[WARN] Playwright failed: {pw_error}. Trying ChromeDriver fallback...")
-                
-                # Fallback to Selenium ChromeDriver
-                try:
-                    with concurrent.futures.ThreadPoolExecutor() as executor:
-                        html_content = await loop.run_in_executor(executor, scrape_with_selenium, htno)
-                    print(f"[INFO] ChromeDriver fallback succeeded for {htno}")
-                except Exception as sel_error:
-                    print(f"[ERROR] Both Playwright and ChromeDriver failed: {sel_error}")
-                    raise HTTPException(status_code=500, detail=f"Scraping failed with both Playwright and ChromeDriver. Please try PDF upload instead.")
-
-        
-        # Parse with BeautifulSoup
-        soup = BeautifulSoup(html_content, 'html.parser')
-        
-        # Check for error in page
-        page_text = soup.get_text().lower()
-        if "not found" in page_text or "invalid" in page_text:
-            raise HTTPException(status_code=404, detail="Hall ticket number not found.")
-        
-        # Find all tables
-        tables = soup.find_all('table')
-        
-        if len(tables) < 2:
-            raise HTTPException(status_code=404, detail="No result tables found. Please verify the hall ticket number or try PDF upload.")
-        
-        # First table is student info
-        student_name = ""
-        student_table = tables[0]
-        for cell in student_table.find_all(['td', 'th']):
-            text = cell.get_text(strip=True)
-            # Name is usually all uppercase letters, 5+ chars
-            if len(text) > 5 and text.isupper() and text.replace(" ", "").isalpha():
-                student_name = text
-                break
-        
-        # Parse semester tables (tables 1+)
-        subjects = []
-        current_year = 1
-        current_sem = 1
-        
-        # Detect regulation from hall ticket for accurate grade mapping
-        detected_regulation = detect_regulation(htno)
-        valid_grades = VALID_GRADES_BY_REGULATION.get(detected_regulation, VALID_GRADES_BY_REGULATION["R18"])
-        print(f"[INFO] Detected regulation: {detected_regulation} for {htno}")
-
-        
-        for table in tables[1:]:
-            rows = table.find_all('tr')
-            if not rows: continue
-
-            # Dynamic Column Mapping
-            header_map = {}
-            header_row = rows[0]
-            header_cells = header_row.find_all(['td', 'th'])
-            
-            # If first row looks like data (no headers), assume standard R18 format
-            # Standard: Code, Name, Internal, External, Total, Grade, Credits
-            if len(header_cells) > 0 and header_cells[0].get_text(strip=True).upper() != "SUBJECT CODE":
-                 header_map = {0: 'code', 1: 'name', 2: 'internal', 3: 'external', 4: 'total', 5: 'grade', 6: 'credits'}
-                 start_row_idx = 0
-            else:
-                # Map headers to indices
-                for idx, cell in enumerate(header_cells):
-                    txt = cell.get_text(strip=True).upper()
-                    if "CODE" in txt: header_map[idx] = 'code'
-                    elif "NAME" in txt: header_map[idx] = 'name'
-                    elif "INT" in txt: header_map[idx] = 'internal'
-                    elif "EXT" in txt: header_map[idx] = 'external'
-                    elif "TOT" in txt: header_map[idx] = 'total'
-                    elif "GRADE" in txt and "POINT" not in txt: header_map[idx] = 'grade' # Avoid Grade Points
-                    elif "CREDIT" in txt or txt == "C" or txt == "CR" or "CRD" in txt: header_map[idx] = 'credits'
-                start_row_idx = 1
-
-            for row in rows[start_row_idx:]:
-                # Get all cells (td or th)
-                cells = row.find_all(['td', 'th'])
-                
-                # Parse semester headers dynamically
-                # Search for the header immediately preceding the table
-                # Headers are usually in <b>, <h4>, <h5>, or <p> tags
-                # Example text: "IV Year I Semester" or "1-1"
-                
-                header_text = ""
-                prev_element = table.find_previous(['b', 'h4', 'h5', 'p', 'center'])
-                if prev_element:
-                    header_text = prev_element.get_text(strip=True)
-                
-                # Try to parse year/sem from header
-                parsed_sem = None
-                
-                # Regex for "IV Year I Semester" or "IV YEAR I SEMESTER"
-                roman_map = {'I': 1, 'II': 2, 'III': 3, 'IV': 4}
-                roman_match = re.search(r"(I{1,4}|IV)\s*Year\s*(I{1,2})\s*Semester", header_text, re.IGNORECASE)
-                if roman_match:
-                    y_str, s_str = roman_match.groups()
-                    parsed_sem = (roman_map.get(y_str.upper(), 0), roman_map.get(s_str.upper(), 0))
-                
-                # Regex for "1-1", "1-2" etc
-                if not parsed_sem:
-                    num_match = re.search(r"(\d)\s*-\s*(\d)", header_text)
-                    if num_match:
-                        parsed_sem = (int(num_match.group(1)), int(num_match.group(2)))
-                
-                if parsed_sem:
-                    current_year, current_sem = parsed_sem
-                else:
-                    # Fallback to sequential logic if parsing fails (but log/warn internally if needed)
-                    # We only increment if we didn't find a header, to maintain legacy behavior for weird pages
-                    pass
-
-                # Check for SGPA row (marks end of semester)
-                if cells:
-                    first_text = cells[0].get_text(strip=True)
-                    if "SGPA" in first_text:
-                        # Extract SGPA value (e.g. "SGPA : 8.69")
-                        try:
-                            # Try to find a float in the text
-                            sgpa_match = re.search(r"(\d+\.\d+)", first_text)
-                            if not sgpa_match and len(cells) > 1:
-                                sgpa_match = re.search(r"(\d+\.\d+)", cells[1].get_text(strip=True))
-                            
-                            if sgpa_match:
-                                official_sgpa = float(sgpa_match.group(1))
-                                
-                                # Attach this SGPA to all subjects of the CURRENT detected semester
-                                # Since we parse the header BEFORE the table, current_year/sem are correct for THIS table.
-                                for s in reversed(subjects):
-                                    if s['year'] == min(current_year, 4) and s['sem'] == current_sem:
-                                        s['official_sem_sgpa'] = official_sgpa
-                                    else:
-                                        # Stop if we hit a subject from a different semester (optimization)
-                                        break 
-                        except:
-                            pass
-
-                        # For sequential fallback logic: Move to next semester ONLY if we rely on it
-                        # But with dynamic parsing, we don't strictly need to increment.
-                        # However, for tables WITHOUT headers, we might still need it.
-                        if not parsed_sem:
-                            if current_sem == 1:
-                                current_sem = 2
-                            else:
-                                current_year += 1
-                                current_sem = 1
-                        continue
-                
-                # Parse subject row using map
-                code = name = grade = ""
-                internal = external = total = None
-                credits = None
-                
-                # If map failed (empty), fallback to index based
-                if not header_map and len(cells) >= 7:
-                     header_map = {0: 'code', 1: 'name', 2: 'internal', 3: 'external', 4: 'total', 5: 'grade', 6: 'credits'}
-
-                for idx, cell in enumerate(cells):
-                    if idx not in header_map: continue
-                    val = cell.get_text(strip=True)
-                    field = header_map[idx]
-                    
-                    if field == 'code': code = val
-                    elif field == 'name': name = val
-                    elif field == 'grade': grade = val
-                    elif field == 'internal': 
-                        try: internal = int(val) 
-                        except: pass
-                    elif field == 'external':
-                        try: external = int(val)
-                        except: pass
-                    elif field == 'total':
-                        try: total = int(val)
-                        except: pass
-                    elif field == 'credits':
-                        try: 
-                            c = float(val)
-                            # Only accept positive credits (0 = likely missing data)
-                            if 0 < c <= 10: credits = c
-                        except: pass
-
-                # Safety net: If credits still None, try scanning typical columns (6 or 7) for float values
-                if credits is None and len(cells) >= 7:
-                    # Look for a small float in any column after index 5
-                    for i in range(5, len(cells)):
-                        try:
-                            val = cells[i].get_text(strip=True)
-                            c = float(val)
-                            # Credits are usually {1, 1.5, 2, 3, 4, 5} — skip 0
-                            if c in [1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0]:
-                                credits = c
-                                break
-                        except: pass
-
-                # ── Intelligent Credit Inference ──
-                # Uses subject code, name, year/sem, and regulation context
-                if not credits:  # catches None, 0, 0.0
-                    credits = infer_credits(code, name, min(current_year, 4), current_sem, detected_regulation)
-
-                # Fallback for Grade if not mapped (sometimes header says 'Gr')
-                if not grade:
-                    for cell in cells:
-                        val = cell.get_text(strip=True)
-                        # Use regulation-specific valid grades
-                        if val in valid_grades:
-                             grade = val; break
-                             
-                # Valid subject check
-                if code and name and grade and len(code) < 15:
-
-                    
-                    if code and code != "Subject Code":
-                        subject_data = {
-                            "subject_code": code,
-                            "subject_name": name,
-                            "grade": grade,
-                            "credits": credits if credits else 3.0,
-                            "grade_points": get_grade_points(grade, detected_regulation),
-                            "year": min(current_year, 4),
-                            "sem": current_sem,
-                            "htno": htno,
-                            "regulation": detected_regulation
-                        }
-                        # Add marks if available
-                        if internal is not None:
-                            subject_data["internal"] = internal
-                        if external is not None:
-                            subject_data["external"] = external
-                        if total is not None:
-                            subject_data["total"] = total
-                        
-                        subjects.append(subject_data)
-        
-        if not subjects:
-            raise HTTPException(status_code=404, detail="Could not extract subject data. Please try PDF upload instead.")
-        
-        # Try to find overall CGPA in page text
-        official_cgpa = None
-        try:
-            # Look for "CGPA : 7.69" pattern
-            cgpa_match = re.search(r"CGPA\s*[:\-]?\s*(\d+\.\d+)", page_text, re.IGNORECASE)
-            if cgpa_match:
-                official_cgpa = float(cgpa_match.group(1))
-        except:
-            pass
-
-        return {
-            "success": True,
-            "htno": htno,
-            "student_name": student_name,
-            "subjects": subjects,
-            "total_subjects": len(subjects),
-            "official_cgpa": official_cgpa,
-            "regulation": detected_regulation
-        }
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}. Please try PDF upload instead.")
+class AdvancedAnalysisRequest(BaseModel):
+    semesters: List[dict]
+    subjects: List[dict]
 
 
 
 def infer_credits(code: str, name: str, year: int, sem: int, regulation: str) -> float:
-    """
-    Intelligently infer subject credits when not available from scraping.
-    Uses multiple signals: subject code patterns, name keywords, semester context,
-    and regulation-aware defaults.
-    
-    JNTUH Credit Structure (typical):
-    - Theory: 3 credits (R18/R22/R24), 3-4 credits (R13/R15/R16)
-    - Theory + Tutorial: 4 credits
-    - Lab: 1.5 credits (R18/R22/R24), 2 credits (R13/R15/R16)
-    - Mini Project: 2-3 credits
-    - Major Project/Dissertation: 10 credits (4-2)
-    - Seminar / Colloquium: 2 credits
-    - Workshop / Skill Course: 1-2 credits
-    - Audit Course: 0 credits (non-credit)
-    - Comprehensive Viva: 2 credits (4-2)
-    """
     name_lower = name.lower().strip() if name else ""
     code_upper = code.upper().strip() if code else ""
     code_lower = code.lower().strip() if code else ""
-    
     is_old_regulation = regulation in ("R13", "R15", "R16")
     
-    # ── Audit / Non-credit courses ──
-    audit_keywords = ["audit", "mooc", "non-credit", "ncc", "nss", "sports"]
-    if any(kw in name_lower for kw in audit_keywords):
-        return 0.0
+    zero_credit_courses = [
+        "environmental", "constitution", "ethics", "gender sensitization", 
+        "human values", "cyber security", "audit", "non-credit", "ncc", "nss", "sports"
+    ]
+    if any(kw in name_lower for kw in zero_credit_courses):
+        return 0.0 if not is_old_regulation else 2.0
+
+    if regulation in SYLLABUS_DATA and "subjects" in SYLLABUS_DATA[regulation]:
+        if code_upper in SYLLABUS_DATA[regulation]["subjects"]:
+            return float(SYLLABUS_DATA[regulation]["subjects"][code_upper]["credits"])
     
-    # ── Main Project / Dissertation (IV Year II Semester) ──
-    project_keywords = ["project work", "project stage", "main project", "major project", 
-                         "dissertation", "industry oriented"]
-    if year == 4 and sem == 2 and any(kw in name_lower for kw in project_keywords):
-        return 10.0
-    
-    # ── Comprehensive Viva (IV Year II Semester) ──
-    if year == 4 and sem == 2 and ("viva" in name_lower or "comprehensive" in name_lower):
-        return 2.0
-    
-    # ── Seminar / Colloquium / Technical Presentation ──
-    if any(kw in name_lower for kw in ["seminar", "colloq", "presentation"]):
-        return 2.0
-    
-    # ── Mini Project / Course Project ──
-    if "mini project" in name_lower or "mini-project" in name_lower or "course project" in name_lower:
-        return 3.0 if is_old_regulation else 2.0
-    # Generic "project" (not main project, not mini project) 
-    if "project" in name_lower:
-        return 2.0
-    
-    # ── Lab courses ──
-    # Subject code ending in 'L' or name containing 'lab' / 'practical' / 'workshop'
+    project_keywords = ["project work", "main project", "major project", "dissertation"]
+    if year == 4 and sem == 2 and any(kw in name_lower for kw in project_keywords): return 10.0
+    if year == 4 and sem == 2 and ("viva" in name_lower or "comprehensive" in name_lower): return 2.0
+    if any(kw in name_lower for kw in ["seminar", "colloq", "presentation"]): return 2.0
+    if "mini project" in name_lower or "course project" in name_lower: return 3.0 if is_old_regulation else 2.0
+    if "project" in name_lower: return 2.0
     if (code_lower.endswith("l") and len(code_upper) >= 5) or "lab" in name_lower or "practical" in name_lower:
         return 2.0 if is_old_regulation else 1.5
-    
-    # ── Workshop / Skill Development ──
     if any(kw in name_lower for kw in ["workshop", "skill", "induction", "communication"]):
         return 2.0 if is_old_regulation else 1.0
     
-    # ── Theory subjects with tutorials (4 credits) ──
-    heavy_theory = ["mathematics", "calculus", "statistics", "probability", "linear algebra",
-                     "discrete math", "numerical", "differential", "transform",
-                     "physics", "chemistry", "engineering mechanics"]
-    if any(kw in name_lower for kw in heavy_theory):
-        return 4.0
-    
-    # ── Environmental Science / Constitution (typically 0 credits in R18+) ──
-    zero_credit_courses = ["environmental", "constitution of india", "professional ethics",
-                            "indian constitution", "gender sensitization", "human values"]
-    if any(kw in name_lower for kw in zero_credit_courses):
-        return 0.0 if not is_old_regulation else 2.0
-    
-    # ── Default: Regular theory subject ──
+    heavy_theory = ["mathematics", "calculus", "statistics", "probability", "physics", "chemistry", "mechanics"]
+    if any(kw in name_lower for kw in heavy_theory): return 4.0
     return 3.0
 
-
-def parse_exam_code(exam_code: str) -> dict:
-    """Parse exam code to extract year and semester."""
-    # Common patterns: "1-1", "1-2", "2-1", etc.
-    try:
-        if "-" in exam_code:
-            parts = exam_code.split("-")
-            return {"year": int(parts[0]), "sem": int(parts[1])}
-    except:
-        pass
-    # Default fallback
-    return {"year": 1, "sem": 1}
-
-
-def detect_regulation(htno: str) -> str:
+def get_student_status_from_semesters(semesters: List[dict], subjects: List[dict], regulation: str = "R18") -> str:
     """
-    Detect JNTUH regulation from hall ticket number.
-    Hall ticket format: YYBBBANNNN where YY = admission year
-    R24: 24+, R22: 22-23, R18: 18-21, R16: 16-17, R15: 15, R13: 13-14
+    Determine student status from semester data and subjects.
+    Returns: 'graduated' | 'graduated_with_backlogs' | 'studying'
     """
-    if not htno or len(htno) < 2:
-        return "R18"  # Default fallback
+    completed_count = len([s for s in semesters if s.get('sgpa', 0) > 0 or s.get('credits', 0) > 0])
+
+    if completed_count >= 8:
+        # Check for active backlogs: subjects with F/Ab that were never cleared
+        subject_attempts: Dict[str, List[str]] = {}
+        for subj in subjects:
+            code = (subj.get('subject_code') or '').upper()
+            if not code:
+                code = (subj.get('subject_name') or '').upper()
+            if code:
+                subject_attempts.setdefault(code, []).append(subj.get('grade', ''))
+
+        has_backlogs = False
+        for code, grades_list in subject_attempts.items():
+            has_pass = any(g not in ('F', 'Ab', '') for g in grades_list)
+            if not has_pass:
+                has_backlogs = True
+                break
+
+        return 'graduated_with_backlogs' if has_backlogs else 'graduated'
+
+    return 'studying'
+
+# ==========================================
+# SCRAPING & PARSING SERVICES
+# ==========================================
+def fetch_api_and_parse(htno: str) -> dict:
+    """Fetches JNTUH results directly from the reliable REST API and formats it."""
+    url = f"https://jntuhresults.dhethi.com/api/getAcademicResult?rollNumber={htno}"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+        'Origin': 'https://jntuhconnect.dhethi.com',
+        'Referer': 'https://jntuhconnect.dhethi.com/'
+    }
+    
+    # Poll the API since it queues requests
+    max_attempts = 15
+    api_data = None
+    
+    for attempt in range(max_attempts):
+        try:
+            resp = requests.get(url, headers=headers, timeout=30)
+            if resp.status_code == 200:
+                api_data = resp.json()
+                break
+            elif resp.status_code == 202:
+                logger.info(f"[API] HTNO {htno} queued... waiting (attempt {attempt+1}/{max_attempts})")
+                time.sleep(3)
+            else:
+                logger.error(f"[API] Error {resp.status_code} for {htno}")
+                raise HTTPException(status_code=502, detail="Failed to fetch data from remote server.")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"[API] Request exception for {htno}: {e}")
+            if attempt == max_attempts - 1:
+                raise HTTPException(status_code=404, detail="Invalid Hall Ticket Number or No Results Found.")
+            time.sleep(3)
+            
+    if not api_data or "results" not in api_data:
+        raise HTTPException(status_code=404, detail="No results found or Invalid Hall Ticket Number.")
+        
+    # Transform api_data into the expected format
+    detected_regulation = detect_regulation(htno)
+    student_name = api_data.get("details", {}).get("name", "Unknown")
+    
+    subjects = []
+    semesters = []
+    
+    raw_sems = api_data.get("results", {}).get("semesters", [])
+    for sem_data in raw_sems:
+        # semester string looks like "1-1", "4-2"
+        sem_str = sem_data.get("semester", "")
+        parts = sem_str.split("-")
+        try:
+            year, sem = int(parts[0]), int(parts[1])
+        except (ValueError, IndexError):
+            continue
+            
+        sem_subjects = sem_data.get("subjects", [])
+        for subj in sem_subjects:
+            grade = subj.get("grades", "").strip()
+            gp = get_grade_points(grade, detected_regulation)
+            
+            # Extract marks if available in API
+            internal = subj.get("internalMarks")
+            external = subj.get("externalMarks")
+            total = subj.get("totalMarks")
+            
+            subjects.append({
+                "subject_code": subj.get("subjectCode", "").strip(),
+                "subject_name": subj.get("subjectName", "").strip(),
+                "grade": grade,
+                "credits": float(subj.get("credits", 0.0)),
+                "grade_points": gp,
+                "year": year,
+                "sem": sem,
+                "htno": htno,
+                "regulation": detected_regulation,
+                "internal": internal if isinstance(internal, (int, float)) else None,
+                "external": external if isinstance(external, (int, float)) else None,
+                "total": total if isinstance(total, (int, float)) else None
+            })
+            
+        sgpa_val = float(sem_data.get("semesterSGPA", 0.0)) if str(sem_data.get("semesterSGPA")).replace('.', '', 1).isdigit() else 0.0
+        
+        semesters.append({
+            "year": year,
+            "sem": sem,
+            "sgpa": sgpa_val,
+            "credits": float(sem_data.get("semesterCredits", 0.0))
+        })
+        
+    official_cgpa = None
+    cgpa_val = api_data.get("results", {}).get("CGPA")
+    if cgpa_val and str(cgpa_val).replace('.', '', 1).isdigit():
+        official_cgpa = float(cgpa_val)
+        
+    student_status = get_student_status_from_semesters(semesters, subjects, detected_regulation)
+    completed_semesters = len([s for s in semesters if s['sgpa'] > 0 or s['credits'] > 0])
+    
+    return {
+        "success": True,
+        "htno": htno,
+        "student_name": student_name,
+        "subjects": subjects,
+        "semesters": semesters,
+        "total_subjects": len(subjects),
+        "official_cgpa": official_cgpa,
+        "regulation": detected_regulation,
+        "student_status": student_status,
+        "completed_semesters": completed_semesters,
+        "total_semesters": 8
+    }
+
+# ==========================================
+# ENDPOINTS
+# ==========================================
+@app.get("/")
+def read_root():
+    index_file = DIST_PATH / "index.html"
+    if index_file.exists():
+        return HTMLResponse(content=index_file.read_text(), status_code=200)
+    return {"message": "JNTUH Academic Insights API is running"}
+
+
+@app.post("/fetch/htno")
+async def fetch_by_hall_ticket(request: HallTicketRequest):
+    htno = request.htno.strip().upper().replace(" ", "")
+    
+    global THREAD_POOL
+    if THREAD_POOL is None:
+        logger.warning("THREAD_POOL was None. Initializing manually.")
+        THREAD_POOL = ThreadPoolExecutor(max_workers=3)
     
     try:
-        year_prefix = int(htno[:2])
-        if year_prefix >= 24:
-            return "R24"
-        elif year_prefix >= 22:
-            return "R22"
-        elif year_prefix >= 18:
-            return "R18"
-        elif year_prefix >= 16:
-            return "R16"
-        elif year_prefix == 15:
-            return "R15"
-        elif year_prefix >= 13:
-            return "R13"
-        else:
-            return "R13"  # Very old batches
-    except ValueError:
-        return "R18"
+        loop = asyncio.get_running_loop()
+        try:
+            result = await loop.run_in_executor(THREAD_POOL, fetch_api_and_parse, htno)
+            logger.info(f"Successfully fetched {result['total_subjects']} subjects for {htno} via REST API")
+            return result
+        except Exception as e:
+            # Re-raise HTTP exceptions explicitly defined in fetch_api_and_parse
+            if isinstance(e, HTTPException):
+                raise e
+            logger.error(f"API failure for {htno}: {e}")
+            raise HTTPException(status_code=500, detail="Data provider failed. Please use PDF Upload.")
 
-
-# Regulation-specific grade point mappings
-GRADE_POINTS_BY_REGULATION = {
-    "R24": {
-        # R24 uses same scale as R22
-        "O": 10, "A+": 9, "A": 8, "B+": 7, "B": 6, "C": 5, "D": 4,
-        "F": 0, "Ab": 0, "-": 0
-    },
-    "R22": {
-        "O": 10, "A+": 9, "A": 8, "B+": 7, "B": 6, "C": 5, "D": 4,
-        "F": 0, "Ab": 0, "-": 0
-    },
-    "R18": {
-        "O": 10, "A+": 9, "A": 8, "B+": 7, "B": 6, "C": 5, "D": 4,
-        "F": 0, "Ab": 0, "-": 0
-    },
-    "R16": {
-        # R16 uses S grade (10 points) instead of O
-        "S": 10, "A": 9, "B": 8, "C": 7, "D": 6, "E": 5,
-        "O": 10,  # Alias for compatibility
-        "A+": 9, "B+": 8, "C+": 7,  # Some sources use these
-        "F": 0, "Ab": 0, "-": 0
-    },
-    "R15": {
-        # R15 uses same scale as R16
-        "S": 10, "A": 9, "B": 8, "C": 7, "D": 6, "E": 5,
-        "O": 10,  # Alias for compatibility
-        "A+": 9, "B+": 8, "C+": 7,  # Some sources use these
-        "F": 0, "Ab": 0, "-": 0
-    },
-    "R13": {
-        # R13 uses S grade (10 points) similar to R16
-        "S": 10, "A": 9, "B": 8, "C": 7, "D": 6, "E": 5,
-        "O": 10,  # Alias for compatibility
-        "A+": 9, "B+": 8, "C+": 7,  # Some sources use these
-        "F": 0, "Ab": 0, "-": 0
-    }
-}
-
-# Valid grades by regulation (for fallback detection)
-VALID_GRADES_BY_REGULATION = {
-    "R24": ['O', 'A+', 'A', 'B+', 'B', 'C', 'D', 'F', 'Ab'],
-    "R22": ['O', 'A+', 'A', 'B+', 'B', 'C', 'D', 'F', 'Ab'],
-    "R18": ['O', 'A+', 'A', 'B+', 'B', 'C', 'D', 'F', 'Ab'],
-    "R16": ['S', 'A', 'B', 'C', 'D', 'E', 'F', 'Ab', 'O', 'A+', 'B+'],
-    "R15": ['S', 'A', 'B', 'C', 'D', 'E', 'F', 'Ab', 'O', 'A+', 'B+'],
-    "R13": ['S', 'A', 'B', 'C', 'D', 'E', 'F', 'Ab', 'O', 'A+', 'B+']
-}
-
-
-def get_grade_points(grade: str, regulation: str = "R18") -> int:
-    """Convert grade to grade points based on regulation."""
-    grade_map = GRADE_POINTS_BY_REGULATION.get(regulation, GRADE_POINTS_BY_REGULATION["R18"])
-    return grade_map.get(grade, 0)
-
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Unexpected error processing {htno}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch results: {str(e)}")
 
 
 @app.post("/analyze/pdf")
 async def analyze_pdf(files: List[UploadFile] = File(...)):
-    """
-    Accepts multiple PDF files, parses them, and returns:
-    - subjects: List of all extracted subjects
-    - semesters_summary: Calculated SGPA per semester
-    - student_info: Name/HTNO
-    """
     processor = AcademicProcessor()
     processed_count = 0
     
     try:
         for file in files:
-            # Read file into memory
             contents = await file.read()
-            pdf_file = io.BytesIO(contents)
-            
-            if processor.parse_pdf(pdf_file):
-                processed_count += 1
+            if processor.parse_pdf(io.BytesIO(contents)):
+                processed_count = int(processed_count) + 1
                 
         if processed_count == 0:
-            raise HTTPException(status_code=400, detail="Could not parse any provided PDFs")
+            raise HTTPException(status_code=400, detail="Could not parse provided PDFs")
             
-        # Convert DataFrames to dicts for JSON response
-        subjects = processor.subjects_df.to_dict(orient='records')
-        semesters = processor.semesters_df.to_dict(orient='records')
+        def clean_dict_list(d_list):
+            return [{k: (None if pd.isna(v) else v) for k, v in d.items()} for d in d_list]
+
+        subjects = clean_dict_list(processor.subjects_df.to_dict(orient='records'))
+        semesters = clean_dict_list(processor.semesters_df.to_dict(orient='records'))
         
-        # Get Student Info
         student_info = processor.get_student_info()
-        htno = student_info.get('htno') or (subjects[0]['htno'] if subjects and 'htno' in subjects[0] else None)
-        student_name = student_info.get('name')
+        htno = student_info.get('htno') or (subjects[0].get('htno') if subjects else None)
         
+        # Get student status
+        student_status = processor.get_student_status()
+        completed_semesters = processor.get_completed_semester_count()
+        backlogs = processor.get_backlogs()
+
         return {
             "success": True,
             "processed_count": processed_count,
             "subjects": subjects,
             "semesters": semesters,
-            "cgpa": processor.get_cgpa(),
-            "percentage": processor.get_percentage(),
+            "cgpa": None if pd.isna(processor.get_cgpa()) else processor.get_cgpa(),
+            "official_cgpa": None if pd.isna(processor.official_cgpa) else processor.official_cgpa,
+            "percentage": None if pd.isna(processor.get_percentage()) else processor.get_percentage(),
             "htno": htno,
-            "student_name": student_name
+            "student_name": student_info.get('name'),
+            "student_status": student_status,
+            "completed_semesters": completed_semesters,
+            "total_semesters": 8,
+            "backlogs_count": len(backlogs),
+            "regulation": student_info.get('regulation', detect_regulation(htno or ''))
         }
-        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"PDF Analysis error: {e}")
+        raise HTTPException(status_code=500, detail="Error analyzing PDF documents.")
+
 
 @app.post("/predict/sgpa")
 async def predict_next_sgpa(data: List[dict]):
-    """
-    Accepts semester history and returns ML prediction for next SGPA.
-    Expects list of dicts with keys: 'year', 'sem', 'sgpa'
-    """
     try:
-        df = pd.DataFrame(data)
-        analyzer = AcademicAnalyzer(df)
-        
-        prediction = analyzer.predict_next_sgpa()
-        insights = analyzer.get_insights()
-        
+        analyzer = AcademicAnalyzer(pd.DataFrame(data))
         return {
-            "prediction": prediction,
-            "insights": insights
+            "prediction": analyzer.predict_next_sgpa(),
+            "insights": analyzer.get_insights()
         }
-        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/analyze/advanced")
-async def analyze_advanced(request_data: dict):
-    """
-    Advanced analysis endpoint using Pandas/Numpy
-    """
+async def analyze_advanced(request: AdvancedAnalysisRequest):
     try:
-        semesters_data = request_data.get('semesters', [])
-        subjects_data = request_data.get('subjects', [])
-        
-        if not semesters_data or not subjects_data:
+        if not request.semesters or not request.subjects:
              return {
                  "success": False,
-                 "message": "Insufficient data for advanced analysis. Please import subjects first.",
-                 "performance": None,
-                 "prediction": None
+                 "message": "Insufficient data. Import subjects first."
              }
         
-        sem_df = pd.DataFrame(semesters_data)
-        sub_df = pd.DataFrame(subjects_data)
-        
-        analyzer = AcademicAnalyzer(semesters_df=sem_df, subjects_df=sub_df)
-        
-        # Get advanced performance stats
-        performance_stats = analyzer.analyze_performance()
-        
-        # Get next SGPA prediction
-        prediction = analyzer.predict_next_sgpa()
+        analyzer = AcademicAnalyzer(
+            semesters_df=pd.DataFrame(request.semesters), 
+            subjects_df=pd.DataFrame(request.subjects)
+        )
         
         return {
             "success": True,
-            "performance": performance_stats,
-            "prediction": prediction
+            "performance": analyzer.analyze_performance(),
+            "prediction": analyzer.predict_next_sgpa()
         }
-        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Advanced analysis failed: {e}")
+        raise HTTPException(status_code=500, detail="Error performing advanced analysis.")
 
-
-# ════════════════════════════════════════════════════════════════════════════════
-# NOTES DOWNLOAD API
-# ════════════════════════════════════════════════════════════════════════════════
-
-# Notes folder paths
-NOTES_BASE_PATH = Path(__file__).parent
-R18_NOTES_PATH = NOTES_BASE_PATH / "jntunotes-main" / "jntunotes-main"
-R22_NOTES_PATH = NOTES_BASE_PATH / "JNTUH-CSE-BTech-Notes-R22-main" / "JNTUH-CSE-BTech-Notes-R22-main"
-
+# ==========================================
+# FILE DOWNLOAD/UPLOAD SYSTEM
+# ==========================================
 @app.get("/notes/catalog")
 async def get_notes_catalog():
-    """
-    Scan notes folders and return available notes catalog.
-    Returns structure: { regulations: [{ name, years: [{ name, semesters: [{ name, subjects: [{ name, files: [...] }] }] }] }] }
-    """
     catalog = {"regulations": []}
     
-    # Scan R18 Notes (hierarchical: Year > Sem > Subject > Files)
     if R18_NOTES_PATH.exists():
-        r18_data = {
-            "name": "R18",
-            "path": "R18",
-            "years": []
-        }
-        
+        r18_data: Dict[str, Any] = {"name": "R18", "path": "R18", "years": []}
         for year_folder in sorted(R18_NOTES_PATH.iterdir()):
             if year_folder.is_dir() and "year" in year_folder.name.lower():
-                year_data = {
-                    "name": year_folder.name,
-                    "path": year_folder.name,
-                    "semesters": []
-                }
-                
+                year_data: Dict[str, Any] = {"name": year_folder.name, "path": year_folder.name, "semesters": []}
                 for sem_folder in sorted(year_folder.iterdir()):
                     if sem_folder.is_dir() and "sem" in sem_folder.name.lower():
-                        sem_data = {
-                            "name": sem_folder.name,
-                            "path": f"{year_folder.name}/{sem_folder.name}",
-                            "subjects": []
-                        }
-                        
+                        sem_data: Dict[str, Any] = {"name": sem_folder.name, "path": f"{year_folder.name}/{sem_folder.name}", "subjects": []}
                         for subject_folder in sorted(sem_folder.iterdir()):
                             if subject_folder.is_dir():
-                                subject_data = {
-                                    "name": subject_folder.name,
-                                    "path": f"{year_folder.name}/{sem_folder.name}/{subject_folder.name}",
-                                    "files": []
-                                }
-                                
+                                subject_data: Dict[str, Any] = {"name": subject_folder.name, "path": f"{year_folder.name}/{sem_folder.name}/{subject_folder.name}", "files": []}
                                 for file in sorted(subject_folder.iterdir()):
                                     if file.is_file() and file.suffix.lower() == ".pdf":
-                                        subject_data["files"].append({
-                                            "name": file.name,
-                                            "path": f"R18/{year_folder.name}/{sem_folder.name}/{subject_folder.name}/{file.name}",
-                                            "size": file.stat().st_size
-                                        })
-                                
-                                if subject_data["files"]:
-                                    sem_data["subjects"].append(subject_data)
-                        
-                        if sem_data["subjects"]:
-                            year_data["semesters"].append(sem_data)
-                
-                if year_data["semesters"]:
-                    r18_data["years"].append(year_data)
-        
-        if r18_data["years"]:
-            catalog["regulations"].append(r18_data)
+                                        files_list = subject_data.get("files", [])
+                                        if isinstance(files_list, list):
+                                            files_list.append({
+                                                "name": file.name,
+                                                "path": f"R18/{year_folder.name}/{sem_folder.name}/{subject_folder.name}/{file.name}",
+                                                "size": file.stat().st_size
+                                            })
+                                if subject_data.get("files"): 
+                                    subs_list = sem_data.get("subjects", [])
+                                    if isinstance(subs_list, list): subs_list.append(subject_data)
+                        if sem_data.get("subjects"): 
+                            sems_list = year_data.get("semesters", [])
+                            if isinstance(sems_list, list): sems_list.append(sem_data)
+                if year_data.get("semesters"): 
+                    yrs_list = r18_data.get("years", [])
+                    if isinstance(yrs_list, list): yrs_list.append(year_data)
+        if r18_data["years"]: catalog["regulations"].append(r18_data)
     
-    # Scan R22 Notes (flat: all PDFs in one folder)
     if R22_NOTES_PATH.exists():
-        r22_data = {
-            "name": "R22",
-            "path": "R22",
-            "files": []  # Flat structure for R22
-        }
-        
+        r22_data: Dict[str, Any] = {"name": "R22", "path": "R22", "files": []}
         for file in sorted(R22_NOTES_PATH.iterdir()):
             if file.is_file() and file.suffix.lower() == ".pdf":
-                r22_data["files"].append({
-                    "name": file.stem,  # Subject name without .pdf
+                r22_files = r22_data.get("files", [])
+                if isinstance(r22_files, list):
+                    r22_files.append({
+                        "name": file.stem,
                     "filename": file.name,
                     "path": f"R22/{file.name}",
                     "size": file.stat().st_size
                 })
-        
-        if r22_data["files"]:
-            catalog["regulations"].append(r22_data)
+        if r22_data["files"]: catalog["regulations"].append(r22_data)
     
     return catalog
 
-
 @app.get("/notes/download")
 async def download_note(path: str):
-    """
-    Download a specific PDF file.
-    Path format: R18/1st year/1st sem/M1/filename.pdf or R22/filename.pdf
-    """
     try:
-        # Validate path to prevent directory traversal
-        if ".." in path or path.startswith("/"):
-            raise HTTPException(status_code=400, detail="Invalid path")
+        requested_path = Path(path)
         
-        # Determine base path based on regulation
         if path.startswith("R18/"):
-            file_path = R18_NOTES_PATH / path[4:]  # Remove "R18/" prefix
+            base_dir = R18_NOTES_PATH.resolve()
+            target_file = (base_dir / requested_path.relative_to("R18")).resolve()
         elif path.startswith("R22/"):
-            file_path = R22_NOTES_PATH / path[4:]  # Remove "R22/" prefix
+            base_dir = R22_NOTES_PATH.resolve()
+            target_file = (base_dir / requested_path.relative_to("R22")).resolve()
         else:
             raise HTTPException(status_code=400, detail="Invalid regulation prefix")
         
-        # Check if file exists
-        if not file_path.exists() or not file_path.is_file():
+        if not target_file.is_relative_to(base_dir):
+            logger.warning(f"Path traversal attempt detected: {path}")
+            raise HTTPException(status_code=403, detail="Forbidden path")
+
+        if not target_file.is_file():
             raise HTTPException(status_code=404, detail="File not found")
+            
+        return FileResponse(path=str(target_file), filename=target_file.name, media_type="application/pdf")
         
-        # Return file for download
-        return FileResponse(
-            path=str(file_path),
-            filename=file_path.name,
-            media_type="application/pdf"
-        )
-        
-    except HTTPException:
-        raise
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Malformed path")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Download error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/notes/upload")
@@ -828,37 +512,33 @@ async def upload_note(
     subject: str = Form(...)
 ):
     try:
-        # Construct path: uploads/pending_notes/{regulation}/{year}/{semester}/{subject}
-        base_path = Path("uploads/pending_notes")
-        save_path = base_path / regulation
+        parts = [p for p in [regulation, year, semester, subject] if p]
+        save_path = UPLOAD_DIR.joinpath(*parts).resolve()
         
-        if year:
-            save_path = save_path / year
-        if semester:
-            save_path = save_path / semester
+        if not save_path.is_relative_to(UPLOAD_DIR.resolve()):
+            raise HTTPException(status_code=403, detail="Forbidden upload path")
             
-        # Create subject folder
-        save_path = save_path / subject
         save_path.mkdir(parents=True, exist_ok=True)
-        
-        # Save file
         file_path = save_path / file.filename
         
-        # Check if file already exists
         if file_path.exists():
-            timestamp = int(time.time())
-            file_path = save_path / f"{timestamp}_{file.filename}"
+            file_path = save_path / f"{int(time.time())}_{file.filename}"
             
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        return {"message": "File uploaded successfully", "path": str(file_path)}
+        return {"message": "File uploaded successfully", "path": str(file_path.relative_to(BASE_DIR))}
         
     except Exception as e:
-        print(f"Error uploading note: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error uploading note: {e}")
+        raise HTTPException(status_code=500, detail="File upload failed")
 
 
+# ==========================================
+# RUNNER SCRIPT
+# ==========================================
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+    # IMPORTANT FIX: Pass the `app` instance object directly instead of the string "server:app".
+    # This guarantees the lifespan context manager executes correctly when running `python server.py`.
+    uvicorn.run(app, host="0.0.0.0", port=8000)
