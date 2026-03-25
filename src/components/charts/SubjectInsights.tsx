@@ -4,7 +4,7 @@ import { GRADE_POINTS } from '../../constants/grading';
 import { motion } from 'framer-motion';
 import { TrendingUp, AlertCircle, Star, Activity, Target, Zap, BarChart3 } from 'lucide-react';
 import type { Subject } from '../../types';
-import { getBestSubjects } from '../../utils/calculations';
+import { getBestSubjects, getSemesterSGPA, getSemesterCredits } from '../../utils/calculations';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 // Grade to numeric value for X-axis
@@ -135,10 +135,19 @@ export default function SubjectInsights() {
                     grade_points: GRADE_POINTS[s.grade] || 0
                 }));
 
+                const semestersPayload = data.semesters
+                    .filter(sem => sem.subjects.length > 0 || (sem.manualSGPA ?? 0) > 0)
+                    .map(sem => ({
+                        year: sem.year,
+                        sem: sem.sem,
+                        sgpa: getSemesterSGPA(sem),
+                        credits: getSemesterCredits(sem),
+                    }));
+
                 const response = await fetch('/analyze/advanced', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ subjects: subjectsPayload })
+                    body: JSON.stringify({ semesters: semestersPayload, subjects: subjectsPayload })
                 });
 
                 const result = await response.json();

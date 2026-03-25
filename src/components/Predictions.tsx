@@ -56,7 +56,7 @@ export default function Predictions() {
         };
 
         fetchPrediction();
-    }, [sgpaData.length]);
+    }, [sgpaData.length, isGraduated]);
 
     // Calculate target when inputs change
     const handleCalculateTarget = () => {
