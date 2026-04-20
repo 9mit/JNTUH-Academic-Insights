@@ -70,42 +70,71 @@ A powerful web application for JNTUH students to **track, analyze, and predict**
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Getting Started
 
-### Prerequisites
-- **Node.js** 18+
-- **Python** 3.9+
+Follow these steps to get the project up and running on your local machine.
 
-### Setup
+### 📋 Prerequisites
+- **Node.js** (v18.0 or higher)
+- **Python** (v3.9 or higher)
+- **Git** (for cloning the repository)
 
+### 🛠️ Installation & Setup
+
+1. **Clone the Repository**
+   ```bash
+   git clone https://github.com/Naumit/JNTUH-Academic-Insights
+   cd JNTUH-Academic-Insights
+   ```
+
+2. **Frontend Setup**
+   Install the necessary Node modules:
+   ```bash
+   npm install
+   ```
+
+3. **Backend Setup**
+   It is recommended to use a virtual environment:
+   ```bash
+   # Create a virtual environment
+   python -m venv venv
+   # Activate it (Windows)
+   .\venv\Scripts\activate
+   # Activate it (Mac/Linux)
+   source venv/bin/activate
+
+   # Install Python dependencies
+   pip install -r requirements.txt
+   ```
+
+4. **Playwright Installation**
+   The application uses Playwright for auto-fetching results. Install the required browser binaries:
+   ```bash
+   playwright install chromium
+   ```
+
+### 🏃 Running the Application
+
+You will need two terminal windows open:
+
+**Terminal 1: Backend (FastAPI)**
 ```bash
-# Clone the repository
-git clone <repo-url>
-cd JNTUH-Academic-Insights
-
-# Install frontend dependencies
-npm install
-
-# Install backend dependencies
-pip install -r requirements.txt
-
-# Install Playwright browsers (for auto-fetch)
-playwright install chromium
+# Ensure your virtual environment is active
+uvicorn server:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Run
-
+**Terminal 2: Frontend (Vite)**
 ```bash
-# Terminal 1 — Backend API
-uvicorn server:app --host 0.0.0.0 --port 8000 --reload
-
-# Terminal 2 — Frontend
 npm run dev
 ```
 
-Open `http://localhost:5173` in your browser.
+### 🌐 Accessing the App
+Once both servers are running, open your browser and navigate to:
+- **Frontend UI**: [http://localhost:5173](http://localhost:5173)
+- **API Documentation**: [http://localhost:8000/docs](http://localhost:8000/docs) (Swagger UI)
 
 ---
+
 
 ## 📁 Project Structure
 
