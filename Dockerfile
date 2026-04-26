@@ -43,8 +43,9 @@ COPY --chown=user --from=frontend-builder /app/dist $HOME/app/dist
 # Switch to the non-root user
 USER user
 
-# Expose default Hugging Face Space port
-EXPOSE 7860
+# Default to Hugging Face port, but allow Render to override via $PORT
+ENV PORT=7860
+EXPOSE $PORT
 
-# Command to run FastAPI server
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "7860"]
+# Command to run FastAPI server using the injected PORT
+CMD ["sh", "-c", "uvicorn server:app --host 0.0.0.0 --port ${PORT}"]
