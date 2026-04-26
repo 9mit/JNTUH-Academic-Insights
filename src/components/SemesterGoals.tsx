@@ -34,15 +34,20 @@ export default function SemesterGoals() {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored) {
             try {
-                setGoals(JSON.parse(stored));
+                const parsed = JSON.parse(stored) as SemesterGoal[];
+                // Ensure all current semesters have a goal entry
+                const merged = data.semesters.map(sem => {
+                    const existing = parsed.find(g => g.semId === sem.id);
+                    return existing || { semId: sem.id, year: sem.year, sem: sem.sem, target: 8.0 };
+                });
+                setGoals(merged);
             } catch {
                 initializeDefaultGoals();
             }
         } else {
             initializeDefaultGoals();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [data.semesters.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const updateGoal = (semId: string, target: number) => {
         setGoals(prev => prev.map(g =>

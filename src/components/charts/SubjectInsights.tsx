@@ -16,6 +16,7 @@ const GRADE_X_VALUES: Record<string, number> = {
     'B+': 7,
     'B': 6,
     'C': 5,
+    'D': 4,
     'E': 5,
     'F': 0,
     'Ab': 0,
@@ -30,6 +31,7 @@ const GRADE_DOT_COLORS: Record<string, string> = {
     'B+': '#8b5cf6',
     'B': '#f59e0b',
     'C': '#fb923c',
+    'D': '#f97316',
     'E': '#facc15',
     'F': '#ef4444',
     'Ab': '#ef4444',
@@ -261,7 +263,7 @@ export default function SubjectInsights() {
                                 domain={[0, 10]}
                                 ticks={[0, 5, 6, 7, 8, 9, 10]}
                                 tickFormatter={(val) => {
-                                    const labels: Record<number, string> = { 0: 'F', 5: 'C/E', 6: 'B', 7: 'B+', 8: 'A', 9: 'A+', 10: 'S/O' };
+                                    const labels: Record<number, string> = { 0: 'F', 4: 'D', 5: 'C/E', 6: 'B', 7: 'B+', 8: 'A', 9: 'A+', 10: 'S/O' };
                                     return labels[val] || val.toString();
                                 }}
                                 stroke="#666"

@@ -44,7 +44,7 @@ SYLLABUS_PATH = BASE_DIR / "backend" / "syllabus.json"
 
 # Notes Directories
 NOTES_BASE_PATH = BASE_DIR
-R18_NOTES_PATH = NOTES_BASE_PATH / "jntunotes-main" / "jntunotes-main"
+R18_NOTES_PATH = NOTES_BASE_PATH / "JNTUH NOTES"
 R22_NOTES_PATH = NOTES_BASE_PATH / "JNTUH-CSE-BTech-Notes-R22-main" / "JNTUH-CSE-BTech-Notes-R22-main"
 UPLOAD_DIR = Path("uploads/pending_notes")
 
@@ -437,37 +437,33 @@ async def get_notes_catalog():
                         for subject_folder in sorted(sem_folder.iterdir()):
                             if subject_folder.is_dir():
                                 subject_data: Dict[str, Any] = {"name": subject_folder.name, "path": f"{year_folder.name}/{sem_folder.name}/{subject_folder.name}", "files": []}
-                                for file in sorted(subject_folder.iterdir()):
-                                    if file.is_file() and file.suffix.lower() == ".pdf":
-                                        files_list = subject_data.get("files", [])
-                                        if isinstance(files_list, list):
-                                            files_list.append({
-                                                "name": file.name,
-                                                "path": f"R18/{year_folder.name}/{sem_folder.name}/{subject_folder.name}/{file.name}",
-                                                "size": file.stat().st_size
-                                            })
-                                if subject_data.get("files"): 
-                                    subs_list = sem_data.get("subjects", [])
-                                    if isinstance(subs_list, list): subs_list.append(subject_data)
-                        if sem_data.get("subjects"): 
-                            sems_list = year_data.get("semesters", [])
-                            if isinstance(sems_list, list): sems_list.append(sem_data)
-                if year_data.get("semesters"): 
-                    yrs_list = r18_data.get("years", [])
-                    if isinstance(yrs_list, list): yrs_list.append(year_data)
+                                # Recursively find all PDFs inside the subject folder (including subfolders like HWN)
+                                for pdf_file in sorted(subject_folder.rglob("*.pdf")):
+                                    if pdf_file.is_file():
+                                        rel_to_notes = pdf_file.relative_to(R18_NOTES_PATH)
+                                        subject_data["files"].append({
+                                            "name": pdf_file.name,
+                                            "path": f"R18/{rel_to_notes.as_posix()}",
+                                            "size": pdf_file.stat().st_size
+                                        })
+                                if subject_data["files"]: 
+                                    sem_data["subjects"].append(subject_data)
+                        if sem_data["subjects"]: 
+                            year_data["semesters"].append(sem_data)
+                if year_data["semesters"]: 
+                    r18_data["years"].append(year_data)
         if r18_data["years"]: catalog["regulations"].append(r18_data)
     
     if R22_NOTES_PATH.exists():
         r22_data: Dict[str, Any] = {"name": "R22", "path": "R22", "files": []}
-        for file in sorted(R22_NOTES_PATH.iterdir()):
-            if file.is_file() and file.suffix.lower() == ".pdf":
-                r22_files = r22_data.get("files", [])
-                if isinstance(r22_files, list):
-                    r22_files.append({
-                        "name": file.stem,
-                    "filename": file.name,
-                    "path": f"R22/{file.name}",
-                    "size": file.stat().st_size
+        for pdf_file in sorted(R22_NOTES_PATH.rglob("*.pdf")):
+            if pdf_file.is_file():
+                rel_to_notes = pdf_file.relative_to(R22_NOTES_PATH)
+                r22_data["files"].append({
+                    "name": pdf_file.stem,
+                    "filename": pdf_file.name,
+                    "path": f"R22/{rel_to_notes.as_posix()}",
+                    "size": pdf_file.stat().st_size
                 })
         if r22_data["files"]: catalog["regulations"].append(r22_data)
     

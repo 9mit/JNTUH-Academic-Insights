@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { AcademicProvider, useAcademic } from './context/AcademicContext';
 import InputView from './components/InputView';
 import Dashboard from './components/Dashboard';
@@ -7,7 +8,8 @@ import Predictions from './components/Predictions';
 import PrintableTranscript from './components/PrintableTranscript';
 import HelpGuide from './components/HelpGuide';
 import NotesHub from './components/NotesHub';
-import type { TabType } from './types';
+import type { TabType, Regulation } from './types';
+import { decodeShareableData } from './utils/exportUtils';
 import { motion } from 'framer-motion';
 import {
   LayoutDashboard,
@@ -36,8 +38,34 @@ const NAV_ITEMS: { id: TabType; label: string; icon: React.ElementType }[] = [
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<TabType>('input');
-  const { getCGPA } = useAcademic();
+  const { getCGPA, importSemesters, setStudentInfo, setRegulation } = useAcademic();
   const { cgpa, percentage } = getCGPA();
+
+  // Parse shared URL on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const shareData = params.get('share');
+    if (shareData) {
+      try {
+        const decoded = decodeShareableData(shareData);
+        if (decoded && decoded.semesters.length > 0) {
+          importSemesters(decoded.semesters);
+          if (decoded.studentName || decoded.hallTicket) {
+            setStudentInfo(decoded.studentName, decoded.hallTicket);
+          }
+          if (decoded.regulation) {
+            setRegulation(decoded.regulation as Regulation);
+          }
+          setActiveTab('dashboard');
+          toast.success('Shared results loaded successfully!');
+          // Clean URL
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      } catch {
+        toast.error('Invalid share link');
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>

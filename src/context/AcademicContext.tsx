@@ -170,7 +170,12 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
     }, [setData]);
 
     const clearAllData = useCallback(() => {
-        setData(initialData);
+        setData({
+            regulation: 'R22',
+            semesters: createEmptySemesters(),
+            studentName: '',
+            hallTicket: '',
+        });
     }, [setData]);
 
     const getSGPA = useCallback((semesterId: string): number => {

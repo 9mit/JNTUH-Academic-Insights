@@ -1,3 +1,12 @@
+---
+title: JNTUH Academic Insights
+emoji: 🎓
+colorFrom: violet
+colorTo: purple
+sdk: docker
+app_port: 7860
+---
+
 # JNTUH Academic Insights 🎓
 
 A powerful web application for JNTUH students to **track, analyze, and predict** their academic performance. Built with React + TypeScript frontend and a Python (FastAPI + Scikit-learn) backend.
