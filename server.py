@@ -46,7 +46,8 @@ SYLLABUS_PATH = BASE_DIR / "backend" / "syllabus.json"
 NOTES_BASE_PATH = BASE_DIR
 R18_NOTES_PATH = NOTES_BASE_PATH / "JNTUH NOTES"
 R22_NOTES_PATH = NOTES_BASE_PATH / "JNTUH-CSE-BTech-Notes-R22-main" / "JNTUH-CSE-BTech-Notes-R22-main"
-UPLOAD_DIR = Path("uploads/pending_notes")
+import tempfile
+UPLOAD_DIR = Path(tempfile.gettempdir()) / "jntuh_pending_notes"
 
 # Globals
 SYLLABUS_DATA: Dict[str, Any] = {}
