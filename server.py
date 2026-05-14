@@ -2,6 +2,7 @@ import asyncio
 import io
 import json
 import logging
+import os
 import re
 import requests
 import shutil
@@ -53,6 +54,37 @@ UPLOAD_DIR = Path(tempfile.gettempdir()) / "jntuh_pending_notes"
 SYLLABUS_DATA: Dict[str, Any] = {}
 BROWSER_SEMAPHORE: Optional[asyncio.Semaphore] = None
 THREAD_POOL: Optional[ThreadPoolExecutor] = None
+KEEP_ALIVE_TASK: Optional[asyncio.Task] = None
+
+
+# ==========================================
+# KEEP-ALIVE SELF-PING (prevents Render free-tier from sleeping)
+# ==========================================
+KEEP_ALIVE_INTERVAL = 10 * 60  # 10 minutes in seconds
+
+async def keep_alive_ping():
+    """Periodically ping our own health endpoint to prevent Render from spinning down.
+    Render free-tier spins down after 15 min of inactivity. We ping every 10 min.
+    Must use the EXTERNAL URL — pinging localhost does NOT reset the inactivity timer."""
+    base_url = os.environ.get("RENDER_EXTERNAL_URL", "")
+    if not base_url:
+        logger.info("RENDER_EXTERNAL_URL not set — keep-alive disabled (local dev mode).")
+        return
+
+    health_url = f"{base_url}/api/health"
+    logger.info(f"Keep-alive self-ping started. Pinging {health_url} every {KEEP_ALIVE_INTERVAL // 60} minutes.")
+
+    while True:
+        await asyncio.sleep(KEEP_ALIVE_INTERVAL)
+        try:
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(None, lambda: requests.get(health_url, timeout=10))
+            if response.status_code == 200:
+                logger.debug(f"Keep-alive ping OK ({response.status_code})")
+            else:
+                logger.warning(f"Keep-alive ping returned {response.status_code}")
+        except Exception as e:
+            logger.warning(f"Keep-alive ping failed: {e}")
 
 
 # ==========================================
@@ -61,7 +93,7 @@ THREAD_POOL: Optional[ThreadPoolExecutor] = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Modern FastAPI lifecycle manager for startup/shutdown events."""
-    global SYLLABUS_DATA, BROWSER_SEMAPHORE, THREAD_POOL
+    global SYLLABUS_DATA, BROWSER_SEMAPHORE, THREAD_POOL, KEEP_ALIVE_TASK
     
     # Load Syllabus
     if SYLLABUS_PATH.exists():
@@ -81,11 +113,16 @@ async def lifespan(app: FastAPI):
     # Ensure upload dir exists
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Start keep-alive self-ping (only works on Render where RENDER_EXTERNAL_URL is set)
+    KEEP_ALIVE_TASK = asyncio.create_task(keep_alive_ping())
+
     logger.info("Application startup complete. Lifespan triggered successfully.")
     
     yield  # App runs here
 
     # Cleanup
+    if KEEP_ALIVE_TASK:
+        KEEP_ALIVE_TASK.cancel()
     if THREAD_POOL:
         THREAD_POOL.shutdown(wait=False)
     logger.info("Application shutdown complete.")
@@ -102,6 +139,15 @@ app.add_middleware(
 
 if DIST_PATH.exists():
     app.mount("/assets", StaticFiles(directory=DIST_PATH / "assets"), name="assets")
+
+
+# ==========================================
+# HEALTH ENDPOINT (used by keep-alive ping)
+# ==========================================
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint — pinged by the keep-alive task to prevent Render spin-down."""
+    return {"status": "ok", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
 
 # ==========================================
 # PYDANTIC MODELS
