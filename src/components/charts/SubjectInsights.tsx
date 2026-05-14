@@ -104,9 +104,10 @@ export default function SubjectInsights() {
 
         const strengths = sorted.filter(s => ['S', 'O', 'A+'].includes(s.grade));
         const average = sorted.filter(s => ['A', 'B+'].includes(s.grade));
-        const weak = sorted.filter(s => ['B', 'C', 'D', 'E', 'F', 'Ab'].includes(s.grade));
+        const focusAreas = sorted.filter(s => ['B', 'C', 'D', 'E'].includes(s.grade));
+        const failed = sorted.filter(s => ['F', 'Ab'].includes(s.grade));
 
-        return { all: sorted, strengths, average, weak };
+        return { all: sorted, strengths, average, focusAreas, failed };
     }, [data]);
 
     // Prepare scatter plot data
@@ -146,7 +147,7 @@ export default function SubjectInsights() {
                         credits: getSemesterCredits(sem),
                     }));
 
-                const response = await fetch('/analyze/advanced', {
+                const response = await fetch(`${API_BASE_URL}/analyze/advanced`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ semesters: semestersPayload, subjects: subjectsPayload })
@@ -303,11 +304,11 @@ export default function SubjectInsights() {
                         <p className="text-[10px] font-bold text-blue-300 uppercase">A Grade</p>
                     </div>
                     <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-center">
-                        <p className="text-2xl font-black text-amber-400">{insights.average.filter(s => s.grade === 'B+').length + insights.weak.filter(s => ['B', 'C'].includes(s.grade)).length}</p>
+                        <p className="text-2xl font-black text-amber-400">{insights.average.filter(s => s.grade === 'B+').length + insights.focusAreas.filter(s => ['B', 'C'].includes(s.grade)).length}</p>
                         <p className="text-[10px] font-bold text-amber-300 uppercase">B+ / B / C</p>
                     </div>
                     <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 text-center">
-                        <p className="text-2xl font-black text-rose-400">{insights.weak.filter(s => ['F', 'Ab'].includes(s.grade)).length}</p>
+                        <p className="text-2xl font-black text-rose-400">{insights.failed.length}</p>
                         <p className="text-[10px] font-bold text-rose-300 uppercase">Backlogs</p>
                     </div>
                 </div>
@@ -364,21 +365,66 @@ export default function SubjectInsights() {
                 )}
             </motion.div>
 
-            {/* Focus Areas */}
-            {insights.weak.length > 0 && (
+            {/* Focus Areas (B, C, D, E grades only — areas to improve, NOT failures) */}
+            {insights.focusAreas.length > 0 && (
                 <motion.div
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.4 }}
-                    className="bg-gradient-to-br from-rose-500/10 to-bg-card border border-rose-500/20 rounded-3xl p-6 relative overflow-hidden"
+                    className="bg-gradient-to-br from-amber-500/10 to-bg-card border border-amber-500/20 rounded-3xl p-6 relative overflow-hidden"
                 >
                     <div className="flex items-center gap-3 mb-6">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-orange-600 flex items-center justify-center shadow-lg shadow-rose-500/20">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
                             <AlertCircle className="w-5 h-5 text-white" />
                         </div>
                         <div>
-                            <h4 className="text-lg font-bold text-white">Focus Areas ({insights.weak.length})</h4>
-                            <p className="text-xs text-rose-400 font-medium">B, C, F Grades</p>
+                            <h4 className="text-lg font-bold text-white">Focus Areas ({insights.focusAreas.length})</h4>
+                            <p className="text-xs text-amber-400 font-medium">B, C, D Grades — Room for improvement</p>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto max-h-[200px] overflow-y-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: '#f59e0b #1a1a1a' }}>
+                        <table className="w-full text-sm">
+                            <thead className="sticky top-0 bg-bg-card/95 backdrop-blur-sm z-10">
+                                <tr className="border-b border-amber-500/20">
+                                    <th className="text-left py-2 px-2 text-[10px] font-bold text-amber-400 uppercase">Code</th>
+                                    <th className="text-left py-2 px-2 text-[10px] font-bold text-amber-400 uppercase">Subject</th>
+                                    <th className="text-center py-2 px-2 text-[10px] font-bold text-amber-400 uppercase">Sem</th>
+                                    <th className="text-center py-2 px-2 text-[10px] font-bold text-amber-400 uppercase">Grade</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {insights.focusAreas.map((sub, i) => (
+                                    <tr key={i} className="border-b border-white/5 hover:bg-white/5">
+                                        <td className="py-2 px-2 font-mono text-text-muted text-xs">{sub.code || '—'}</td>
+                                        <td className="py-2 px-2 text-white text-xs max-w-[200px] truncate" title={sub.name}>{sub.name}</td>
+                                        <td className="py-2 px-2 text-center text-text-muted text-xs">{sub.semesterId}</td>
+                                        <td className="py-2 px-2 text-center">
+                                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${getGradeBgColor(sub.grade)}`}>{sub.grade}</span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </motion.div>
+            )}
+
+            {/* Failed Subjects (F/Ab grades — shown separately, only if they exist) */}
+            {insights.failed.length > 0 && (
+                <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.5 }}
+                    className="bg-gradient-to-br from-rose-500/10 to-bg-card border border-rose-500/20 rounded-3xl p-6 relative overflow-hidden"
+                >
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-red-600 flex items-center justify-center shadow-lg shadow-rose-500/20">
+                            <AlertCircle className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                            <h4 className="text-lg font-bold text-white">Failed Subjects ({insights.failed.length})</h4>
+                            <p className="text-xs text-rose-400 font-medium">F / Absent — Must be cleared</p>
                         </div>
                     </div>
 
@@ -393,18 +439,24 @@ export default function SubjectInsights() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {insights.weak.map((sub, i) => (
+                                {insights.failed.map((sub, i) => (
                                     <tr key={i} className="border-b border-white/5 hover:bg-white/5">
                                         <td className="py-2 px-2 font-mono text-text-muted text-xs">{sub.code || '—'}</td>
                                         <td className="py-2 px-2 text-white text-xs max-w-[200px] truncate" title={sub.name}>{sub.name}</td>
                                         <td className="py-2 px-2 text-center text-text-muted text-xs">{sub.semesterId}</td>
                                         <td className="py-2 px-2 text-center">
-                                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${getGradeBgColor(sub.grade)}`}>{sub.grade}</span>
+                                            <span className="px-2 py-0.5 rounded text-xs font-bold bg-rose-500/20 text-rose-300">{sub.grade === 'Ab' ? 'Absent' : sub.grade}</span>
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+
+                    <div className="mt-4 p-3 bg-rose-500/10 rounded-xl border border-rose-500/10 text-center">
+                        <p className="text-xs text-rose-300">
+                            ⚠️ These {insights.failed.length} subject(s) need to be cleared to complete your degree.
+                        </p>
                     </div>
                 </motion.div>
             )}

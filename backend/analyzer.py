@@ -88,28 +88,58 @@ class AcademicAnalyzer:
     def analyze_performance(self):
         """
         Detailed performance stats for advanced analysis.
+        Returns consistency_score, grade_stability, and dominant_grade
+        as expected by the frontend SubjectInsights component.
         """
         stats = {
+            "consistency_score": 0,
+            "grade_stability": "N/A",
+            "dominant_grade": "N/A",
             "average_sgpa": 0.0,
-            "best_semester": None,
-            "worst_semester": None,
             "trend": "Stable"
         }
         
         try:
             if not self.semesters_df.empty:
-                stats["average_sgpa"] = round(self.semesters_df['sgpa'].mean(), 2)
-                stats["best_semester"] = self.semesters_df.loc[self.semesters_df['sgpa'].idxmax()].to_dict()
-                stats["worst_semester"] = self.semesters_df.loc[self.semesters_df['sgpa'].idxmin()].to_dict()
+                sgpas = self.semesters_df['sgpa'].values
+                valid_sgpas = sgpas[sgpas > 0]
                 
-                # Trend
-                if len(self.semesters_df) >= 2:
-                    first = self.semesters_df.iloc[0]['sgpa']
-                    last = self.semesters_df.iloc[-1]['sgpa']
-                    if last > first + 0.5: stats['trend'] = 'Rising'
-                    elif last < first - 0.5: stats['trend'] = 'Falling'
+                if len(valid_sgpas) > 0:
+                    stats["average_sgpa"] = round(float(np.mean(valid_sgpas)), 2)
+                    
+                    # Consistency score: 100 - (std_dev * 10), clamped to 0-100
+                    if len(valid_sgpas) >= 2:
+                        std_dev = float(np.std(valid_sgpas))
+                        consistency = max(0, min(100, round(100 - std_dev * 20)))
+                        stats["consistency_score"] = consistency
+                        
+                        # Grade stability based on consistency
+                        if consistency >= 85:
+                            stats["grade_stability"] = "Very Stable"
+                        elif consistency >= 70:
+                            stats["grade_stability"] = "Stable"
+                        elif consistency >= 50:
+                            stats["grade_stability"] = "Moderate"
+                        else:
+                            stats["grade_stability"] = "Volatile"
+                        
+                        # Trend
+                        first = float(valid_sgpas[0])
+                        last = float(valid_sgpas[-1])
+                        if last > first + 0.5: stats['trend'] = 'Rising'
+                        elif last < first - 0.5: stats['trend'] = 'Falling'
+                    else:
+                        stats["consistency_score"] = 100
+                        stats["grade_stability"] = "N/A"
+            
+            # Dominant grade from subjects
+            if not self.subjects_df.empty and 'grade' in self.subjects_df.columns:
+                grade_counts = self.subjects_df['grade'].value_counts()
+                if len(grade_counts) > 0:
+                    stats["dominant_grade"] = str(grade_counts.index[0])
                     
         except Exception as e:
             print(f"Analysis error: {e}")
             
         return stats
+
