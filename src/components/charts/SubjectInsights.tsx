@@ -7,6 +7,8 @@ import type { Subject } from '../../types';
 import { getBestSubjects, getSemesterSGPA, getSemesterCredits } from '../../utils/calculations';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 // Grade to numeric value for X-axis
 const GRADE_X_VALUES: Record<string, number> = {
     'S': 10,
