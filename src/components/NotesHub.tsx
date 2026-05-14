@@ -4,6 +4,7 @@ import { BookOpen, Download, ChevronRight, ChevronDown, Folder, FileText, Loader
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 interface NoteFile {
     name: string;
     filename?: string;
@@ -70,7 +71,7 @@ export default function NotesHub() {
             // 1. Fetch Local Catalog (Backend File System)
             let builtCatalog: NotesCatalog = { regulations: [] };
             try {
-                const localResponse = await fetch('/notes/catalog');
+                const localResponse = await fetch(`${API_BASE_URL}/notes/catalog`);
                 if (localResponse.ok) {
                     builtCatalog = await localResponse.json();
                 }
@@ -169,7 +170,7 @@ export default function NotesHub() {
 
         // Fallback for legacy local paths
         const link = document.createElement('a');
-        link.href = `/notes/download?path=${encodeURIComponent(pathOrUrl)}`;
+        link.href = `${API_BASE_URL}/notes/download?path=${encodeURIComponent(pathOrUrl)}`;
         link.download = filename;
         link.target = '_blank';
         document.body.appendChild(link);

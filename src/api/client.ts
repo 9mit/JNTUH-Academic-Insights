@@ -1,5 +1,5 @@
 
-const API_BASE_URL = '';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 // Default timeout for API requests (60 seconds for auto-fetch, 30 seconds for others)
 const DEFAULT_TIMEOUT = 30000;

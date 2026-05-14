@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Set up user permissions for Hugging Face Spaces (runs as UID 1000)
+# Set up non-root user for security
 RUN useradd -m -u 1000 user
 ENV HOME=/home/user \
     PATH=/home/user/.local/bin:$PATH
@@ -43,8 +43,8 @@ COPY --chown=user --from=frontend-builder /app/dist $HOME/app/dist
 # Switch to the non-root user
 USER user
 
-# Default to Hugging Face port, but allow Render to override via $PORT
-ENV PORT=7860
+# Default port, allow override via $PORT
+ENV PORT=8000
 EXPOSE $PORT
 
 # Command to run FastAPI server using the injected PORT
