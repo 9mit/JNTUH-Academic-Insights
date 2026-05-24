@@ -161,6 +161,7 @@ export default function NotesHub() {
             link.href = pathOrUrl;
             link.download = filename;
             link.target = '_blank';
+            link.rel = 'noopener noreferrer';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -173,6 +174,7 @@ export default function NotesHub() {
         link.href = `${API_BASE_URL}/notes/download?path=${encodeURIComponent(pathOrUrl)}`;
         link.download = filename;
         link.target = '_blank';
+        link.rel = 'noopener noreferrer';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -271,7 +273,7 @@ export default function NotesHub() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 select-none">
             {/* Header */}
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -281,9 +283,9 @@ export default function NotesHub() {
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 mb-4">
                     <BookOpen className="w-8 h-8 text-white" />
                 </div>
-                <h1 className="text-3xl font-black text-white mb-2">Notes Hub</h1>
+                <h1 className="text-3xl font-black text-white mb-2">Study Library</h1>
                 <p className="text-text-muted max-w-xl mx-auto">
-                    Download study materials organized by regulation, year, and semester
+                    Access and download notes organized by your semester needs
                 </p>
             </motion.div>
 
@@ -302,9 +304,9 @@ export default function NotesHub() {
                         <Plus className="w-6 h-6 text-white" />
                     </div>
                     <div className="flex-1 text-left">
-                        <h2 className="text-xl font-bold text-white">Contribute Notes</h2>
+                        <h2 className="text-xl font-bold text-white">Share Study Materials</h2>
                         <p className="text-xs text-text-muted mt-1">
-                            Share your study materials with the community
+                            Help other students by uploading your notes
                         </p>
                     </div>
                     {showContribute
@@ -415,8 +417,8 @@ export default function NotesHub() {
                                                         toast.error('Only PDF files are accepted');
                                                         return;
                                                     }
-                                                    if (file.size > 50 * 1024 * 1024) {
-                                                        toast.error('File size must be under 50MB');
+                                                    if (file.size > 15 * 1024 * 1024) {
+                                                        toast.error('File size must be under 15MB');
                                                         return;
                                                     }
                                                     setUploadFile(file);
@@ -446,7 +448,7 @@ export default function NotesHub() {
                                                 <p className="text-sm text-text-muted">
                                                     Click to select or drag & drop a PDF file
                                                 </p>
-                                                <p className="text-xs text-text-muted mt-1">Max file size: 50MB</p>
+                                                <p className="text-xs text-text-muted mt-1">Max file size: 15MB</p>
                                             </div>
                                         )}
                                     </div>

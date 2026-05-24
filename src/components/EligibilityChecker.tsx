@@ -121,7 +121,10 @@ export default function EligibilityChecker() {
                         min="0"
                         max="10"
                         value={customCutoff}
-                        onChange={(e) => setCustomCutoff(parseFloat(e.target.value) || 0)}
+                        onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            setCustomCutoff(Math.max(0, Math.min(10, val)));
+                        }}
                         className="input-field w-full"
                     />
                 </div>

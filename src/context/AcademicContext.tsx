@@ -79,6 +79,10 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
             name: subject?.name || '',
             grade: subject?.grade || 'O',
             credits: subject?.credits || 3,
+            ...(subject?.internal !== undefined && { internal: subject.internal }),
+            ...(subject?.external !== undefined && { external: subject.external }),
+            ...(subject?.total !== undefined && { total: subject.total }),
+            ...(subject?.official_sem_sgpa !== undefined && { official_sem_sgpa: subject.official_sem_sgpa }),
         };
 
         setData(prev => ({

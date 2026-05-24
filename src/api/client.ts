@@ -70,9 +70,15 @@ export async function uploadPDFs(files: File[]) {
 
 export async function fetchByHallTicket(htno: string) {
     // Validate hall ticket format
-    const cleanHtno = htno.trim().toUpperCase();
-    if (cleanHtno.length < 10) {
-        throw new Error('Hall ticket number must be at least 10 characters');
+    const cleanHtno = htno.trim().toUpperCase().replace(/\s/g, '');
+    
+    // Block null bytes, control characters, and non-alphanumeric content
+    if (/[\x00-\x1f\x7f]/.test(cleanHtno) || !/^[A-Z0-9]+$/.test(cleanHtno)) {
+        throw new Error('Hall ticket number contains invalid characters');
+    }
+    
+    if (cleanHtno.length < 10 || cleanHtno.length > 12) {
+        throw new Error('Hall ticket number must be 10-12 alphanumeric characters');
     }
 
     try {

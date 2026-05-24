@@ -56,7 +56,7 @@ export default function Predictions() {
         };
 
         fetchPrediction();
-    }, [sgpaData.length, isGraduated]);
+    }, [sgpaData, isGraduated]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Calculate target when inputs change
     const handleCalculateTarget = () => {
@@ -189,7 +189,10 @@ export default function Predictions() {
                             min="5"
                             max="10"
                             value={targetCGPA}
-                            onChange={(e) => setTargetCGPA(parseFloat(e.target.value) || 8.5)}
+                            onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                setTargetCGPA(Math.max(0, Math.min(10, val)));
+                            }}
                             className="input-field w-full"
                         />
                     </div>
@@ -202,7 +205,10 @@ export default function Predictions() {
                             min="1"
                             max="8"
                             value={remainingSemesters}
-                            onChange={(e) => setRemainingSemesters(parseInt(e.target.value) || 1)}
+                            onChange={(e) => {
+                                const val = parseInt(e.target.value) || 1;
+                                setRemainingSemesters(Math.max(1, Math.min(8, val)));
+                            }}
                             className="input-field w-full"
                         />
                     </div>

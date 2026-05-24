@@ -20,24 +20,25 @@ import {
   Zap,
   ChevronRight,
   Brain,
-  BookOpen
+  BookOpen,
+  Menu,
+  X
 } from 'lucide-react';
-
-// Motion Components
 
 import PageTransition from './components/motion/PageTransition';
 
 const NAV_ITEMS: { id: TabType; label: string; icon: React.ElementType }[] = [
-  { id: 'input', label: 'Academic Walkthrough', icon: PenLine },
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'predictions', label: 'Insights', icon: Brain },
-  { id: 'transcript', label: 'Transcript', icon: FileText },
-  { id: 'notes', label: 'Notes', icon: BookOpen },
-  { id: 'help', label: 'How to Use', icon: HelpCircle },
+  { id: 'input', label: 'Add Grades', icon: PenLine },
+  { id: 'dashboard', label: 'Your Progress', icon: LayoutDashboard },
+  { id: 'predictions', label: 'Goal Planner', icon: Brain },
+  { id: 'transcript', label: 'Academic Report', icon: FileText },
+  { id: 'notes', label: 'Study Library', icon: BookOpen },
+  { id: 'help', label: 'Help Guide', icon: HelpCircle },
 ];
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<TabType>('input');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { getCGPA, importSemesters, setStudentInfo, setRegulation } = useAcademic();
   const { cgpa, percentage } = getCGPA();
 
@@ -67,33 +68,63 @@ function AppContent() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Dynamic document title based on active tab
+  useEffect(() => {
+    const currentTab = NAV_ITEMS.find(i => i.id === activeTab);
+    document.title = currentTab
+      ? `${currentTab.label} — JNTUH Academic Insights`
+      : 'JNTUH Academic Insights';
+  }, [activeTab]);
+
   return (
     <>
-      <div className="min-h-screen flex">
-        <aside className="w-72 bg-sidebar border-r border-white/5 flex flex-col fixed h-screen no-print z-50">
+      <div className="min-h-screen flex bg-black relative overflow-x-hidden">
+        {/* Backdrop for Mobile Drawer */}
+        {isMobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-md z-45 lg:hidden no-print"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+        )}
+
+        <aside className={`w-72 bg-floating-sidebar border border-white/5 rounded-[32px] lg:m-6 m-0 lg:h-[calc(100vh-3rem)] h-screen flex flex-col fixed no-print z-50 transform 
+            ${isMobileMenuOpen ? 'translate-x-0 top-0 left-0 lg:m-6 m-0' : '-translate-x-full top-0 left-0 lg:m-6 m-0'} 
+            lg:translate-x-0 transition-all duration-500 ease-out`}>
           {/* Logo */}
           <div className="p-8 border-b border-white/5 relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-50" />
-            <div className="flex items-center gap-4 relative z-10">
-              <div className="relative">
-                <div className="absolute inset-0 bg-primary rounded-2xl blur-xl opacity-40 animate-pulse" />
-                <div className="relative w-14 h-14 bg-gradient-to-br from-gray-900 to-black rounded-2xl flex items-center justify-center border border-white/10 shadow-2xl group-hover:border-primary/50 transition-colors duration-500">
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                  <GraduationCap className="w-7 h-7 text-white relative z-10 drop-shadow-[0_0_10px_rgba(56,189,248,0.5)]" />
+            <div className="flex items-center justify-between gap-4 relative z-10">
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-primary rounded-2xl blur-xl opacity-40 animate-pulse" />
+                  <div className="relative w-12 h-12 bg-gradient-to-br from-gray-900 to-black rounded-2xl flex items-center justify-center border border-white/10 shadow-2xl group-hover:border-primary/50 transition-colors duration-500">
+                    <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    <GraduationCap className="w-6 h-6 text-white relative z-10 drop-shadow-[0_0_10px_rgba(56,189,248,0.5)]" />
+                  </div>
+                </div>
+                <div>
+                  <h1 className="text-lg font-black text-white tracking-tight drop-shadow-md">JNTUH</h1>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <p className="text-[9px] font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-cyan-300 uppercase tracking-[0.2em]">Insights</p>
+                  </div>
                 </div>
               </div>
-              <div>
-                <h1 className="text-xl font-black text-white tracking-tight drop-shadow-md">JNTUH</h1>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <p className="text-[10px] font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-cyan-300 uppercase tracking-[0.2em]">Academic Analyzer</p>
-                </div>
-              </div>
+
+              {/* Close Button for Mobile Drawer */}
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="lg:hidden p-1.5 hover:bg-white/10 rounded-xl transition-colors border border-white/10 text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-6 space-y-2">
+          <nav className="flex-1 p-6 space-y-2 overflow-y-auto custom-scrollbar">
             <p className="text-[10px] font-bold text-text-muted uppercase tracking-[0.2em] mb-4 px-4 flex items-center gap-2">
               <span className="text-primary">◆</span> Navigation
             </p>
@@ -111,7 +142,10 @@ function AppContent() {
                     />
                   )}
                   <button
-                    onClick={() => setActiveTab(item.id)}
+                    onClick={() => {
+                      setActiveTab(item.id);
+                      setIsMobileMenuOpen(false);
+                    }}
                     className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-left relative z-10 transition-all duration-300
                         ${isActive
                         ? 'text-white'
@@ -168,26 +202,36 @@ function AppContent() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 ml-72 relative">
+        <main className="flex-1 lg:ml-[21rem] ml-0 relative min-h-screen">
           {/* Top Bar - Grand Centered Design */}
-          <header className="sticky top-0 z-40 bg-black/90 border-b border-white/5 no-print">
-            <div className="px-10 py-8 text-center">
-              <h2 className="text-3xl font-black text-white tracking-tight bg-gradient-to-r from-white via-primary to-white bg-clip-text">
-                {NAV_ITEMS.find(i => i.id === activeTab)?.label}
-              </h2>
-              <p className="text-sm text-text-muted mt-2 max-w-md mx-auto">
-                {activeTab === 'dashboard' && 'Track your academic performance'}
-                {activeTab === 'input' && 'Import and manage your results'}
-                {activeTab === 'predictions' && 'Smart grade predictions'}
-                {activeTab === 'transcript' && 'Generate official transcripts'}
-                {activeTab === 'notes' && 'Download study materials'}
-                {activeTab === 'help' && 'Complete walkthrough guide'}
-              </p>
+          <header className="sticky top-0 z-40 bg-[#060b16]/85 border-b border-white/5 no-print backdrop-blur-md">
+            <div className="px-6 lg:px-10 py-6 flex items-center justify-between lg:justify-center relative">
+              {/* Hamburger Button for Mobile */}
+              <button
+                onClick={() => setIsMobileMenuOpen(true)}
+                className="lg:hidden p-2 hover:bg-white/5 border border-white/10 rounded-xl text-text-muted hover:text-white transition-all absolute left-6"
+              >
+                <Menu className="w-5 h-5 text-white" />
+              </button>
+
+              <div className="text-center w-full">
+                <h2 className="text-xl lg:text-3xl font-black text-white tracking-tight bg-gradient-to-r from-white via-primary to-white bg-clip-text">
+                  {NAV_ITEMS.find(i => i.id === activeTab)?.label}
+                </h2>
+                <p className="text-xs text-text-muted mt-1 max-w-md mx-auto hidden sm:block">
+                  {activeTab === 'dashboard' && 'View your grade journey & statistics'}
+                  {activeTab === 'input' && 'Add or import your semester results'}
+                  {activeTab === 'predictions' && 'Plan future semester goals & targets'}
+                  {activeTab === 'transcript' && 'View and export your mark lists'}
+                  {activeTab === 'notes' && 'Find study materials & resources'}
+                  {activeTab === 'help' && 'Frequently asked questions & usage guide'}
+                </p>
+              </div>
             </div>
           </header>
 
           {/* Page Content */}
-          <div className="p-10">
+          <div className="p-6 lg:p-10">
             <PageTransition id={activeTab} mode="wait">
               {activeTab === 'input' && <InputView />}
               {activeTab === 'dashboard' && <Dashboard />}
@@ -197,8 +241,6 @@ function AppContent() {
               {activeTab === 'help' && <HelpGuide />}
             </PageTransition>
           </div>
-
-
         </main>
       </div>
     </>

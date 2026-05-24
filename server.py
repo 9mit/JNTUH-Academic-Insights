@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 import pandas as pd
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -137,6 +137,65 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ==========================================
+# SECURITY HEADERS & HELPERS
+# ==========================================
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cloud.umami.is; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: blob:; "
+        "connect-src 'self' https://*.supabase.co https://jntuhresults.dhethi.com; "
+        "frame-ancestors 'none';"
+    )
+    # Add HSTS in production (when served behind HTTPS on Render)
+    if os.environ.get("RENDER_EXTERNAL_URL"):
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+def check_pdf_file(file: UploadFile):
+    # 1. Validate File Extension
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF documents are allowed.")
+    
+    # 2. Validate MIME Type
+    if file.content_type != "application/pdf":
+        raise HTTPException(status_code=400, detail="Invalid file type. Must be application/pdf.")
+        
+    # 3. Validate File Size (Max 15MB)
+    try:
+        file.file.seek(0, os.SEEK_END)
+        size = file.file.tell()
+        file.file.seek(0, os.SEEK_SET)
+        if size > 15 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="File size exceeds the 15MB limit.")
+        if size < 4:
+            raise HTTPException(status_code=400, detail="File is too small to be a valid PDF.")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
+    # 4. Validate PDF Magic Bytes (%PDF-)
+    try:
+        header = file.file.read(5)
+        file.file.seek(0, os.SEEK_SET)
+        if header[:4] != b'%PDF':
+            raise HTTPException(status_code=400, detail="File does not appear to be a valid PDF (bad header).")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
 if DIST_PATH.exists():
     app.mount("/assets", StaticFiles(directory=DIST_PATH / "assets"), name="assets")
 
@@ -165,9 +224,28 @@ class Subject(BaseModel):
 class HallTicketRequest(BaseModel):
     htno: str = Field(..., min_length=10, max_length=10, description="10-character Hall Ticket Number")
 
+class SemesterSGPARecord(BaseModel):
+    year: int = Field(..., ge=1, le=4)
+    sem: int = Field(..., ge=1, le=2)
+    sgpa: float = Field(..., ge=0.0, le=10.0)
+
+class SubjectInput(BaseModel):
+    subject_code: str = Field(..., min_length=1, max_length=20)
+    subject_name: str = Field(..., min_length=1, max_length=100)
+    grade: str = Field(..., min_length=1, max_length=10)
+    credits: float = Field(..., ge=0.0, le=20.0)
+    grade_points: int = Field(..., ge=0, le=10)
+    year: int = Field(..., ge=1, le=4)
+    sem: int = Field(..., ge=1, le=2)
+    htno: Optional[str] = None
+    regulation: Optional[str] = None
+    internal: Optional[int] = Field(None, ge=0, le=100)
+    external: Optional[int] = Field(None, ge=0, le=100)
+    total: Optional[int] = Field(None, ge=0, le=100)
+
 class AdvancedAnalysisRequest(BaseModel):
-    semesters: List[dict]
-    subjects: List[dict]
+    semesters: List[SemesterSGPARecord]
+    subjects: List[SubjectInput]
 
 
 
@@ -357,6 +435,9 @@ def read_root():
 async def fetch_by_hall_ticket(request: HallTicketRequest):
     htno = request.htno.strip().upper().replace(" ", "")
     
+    if not re.match(r"^[0-9]{2}[A-Z0-9]{8}$", htno):
+        raise HTTPException(status_code=400, detail="Invalid Hall Ticket Number format. Must be 10 alphanumeric characters.")
+        
     global THREAD_POOL
     if THREAD_POOL is None:
         logger.warning("THREAD_POOL was None. Initializing manually.")
@@ -389,9 +470,11 @@ async def analyze_pdf(files: List[UploadFile] = File(...)):
     
     try:
         for file in files:
+            # Strictly validate the PDF file size & content
+            check_pdf_file(file)
             contents = await file.read()
             if processor.parse_pdf(io.BytesIO(contents)):
-                processed_count = int(processed_count) + 1
+                processed_count = processed_count + 1
                 
         if processed_count == 0:
             raise HTTPException(status_code=400, detail="Could not parse provided PDFs")
@@ -426,15 +509,17 @@ async def analyze_pdf(files: List[UploadFile] = File(...)):
             "backlogs_count": len(backlogs),
             "regulation": student_info.get('regulation', detect_regulation(htno or ''))
         }
+    except HTTPException as he:
+        raise he
     except Exception as e:
         logger.error(f"PDF Analysis error: {e}")
         raise HTTPException(status_code=500, detail="Error analyzing PDF documents.")
 
 
 @app.post("/predict/sgpa")
-async def predict_next_sgpa(data: List[dict]):
+async def predict_next_sgpa(data: List[SemesterSGPARecord]):
     try:
-        analyzer = AcademicAnalyzer(pd.DataFrame(data))
+        analyzer = AcademicAnalyzer(pd.DataFrame([d.dict() for d in data]))
         return {
             "prediction": analyzer.predict_next_sgpa(),
             "insights": analyzer.get_insights()
@@ -453,8 +538,8 @@ async def analyze_advanced(request: AdvancedAnalysisRequest):
              }
         
         analyzer = AcademicAnalyzer(
-            semesters_df=pd.DataFrame(request.semesters), 
-            subjects_df=pd.DataFrame(request.subjects)
+            semesters_df=pd.DataFrame([d.dict() for d in request.semesters]), 
+            subjects_df=pd.DataFrame([d.dict() for d in request.subjects])
         )
         
         return {
@@ -519,8 +604,15 @@ async def get_notes_catalog():
 @app.get("/notes/download")
 async def download_note(path: str):
     try:
+        if "\0" in path:
+            raise HTTPException(status_code=400, detail="Null byte injection detected")
+            
         requested_path = Path(path)
         
+        if ".." in path or "\\" in path:
+            logger.warning(f"Path traversal sequence blocked: {path}")
+            raise HTTPException(status_code=403, detail="Forbidden path")
+            
         if path.startswith("R18/"):
             base_dir = R18_NOTES_PATH.resolve()
             target_file = (base_dir / requested_path.relative_to("R18")).resolve()
@@ -555,23 +647,56 @@ async def upload_note(
     subject: str = Form(...)
 ):
     try:
-        parts = [p for p in [regulation, year, semester, subject] if p]
+        # 1. Strictly validate the PDF size & extension
+        check_pdf_file(file)
+        
+        # 2. Validate Form fields to block potential command injections
+        if not re.match(r"^[a-zA-Z0-9_-]{2,10}$", regulation):
+            raise HTTPException(status_code=400, detail="Invalid regulation format.")
+        if year and not re.match(r"^[a-zA-Z0-9_\s-]{1,20}$", year):
+            raise HTTPException(status_code=400, detail="Invalid year format.")
+        if semester and not re.match(r"^[a-zA-Z0-9_\s-]{1,20}$", semester):
+            raise HTTPException(status_code=400, detail="Invalid semester format.")
+        if not re.match(r"^[a-zA-Z0-9\s._-]{1,50}$", subject):
+            raise HTTPException(status_code=400, detail="Invalid subject format.")
+            
+        # 3. Sanitize filename completely (leaves only alphanumeric, dots, dashes, underscores)
+        original_filename = file.filename or "upload.pdf"
+        safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '_', original_filename)
+        if not safe_filename.lower().endswith(".pdf"):
+            safe_filename += ".pdf"
+            
+        parts = [p.strip() for p in [regulation, year, semester, subject] if p]
+        for part in parts:
+            if ".." in part or "/" in part or "\\" in part:
+                raise HTTPException(status_code=400, detail="Invalid characters in folder structure.")
+                
         save_path = UPLOAD_DIR.joinpath(*parts).resolve()
         
+        # 4. Strict parent directory boundary check
         if not save_path.is_relative_to(UPLOAD_DIR.resolve()):
             raise HTTPException(status_code=403, detail="Forbidden upload path")
             
         save_path.mkdir(parents=True, exist_ok=True)
-        file_path = save_path / file.filename
+        file_path = (save_path / safe_filename).resolve()
         
+        # 5. Airtight file target boundary check
+        if not file_path.is_relative_to(save_path):
+            raise HTTPException(status_code=403, detail="Forbidden file destination path")
+            
         if file_path.exists():
-            file_path = save_path / f"{int(time.time())}_{file.filename}"
+            file_path = save_path / f"{int(time.time())}_{safe_filename}"
+            file_path = file_path.resolve()
+            if not file_path.is_relative_to(save_path):
+                raise HTTPException(status_code=403, detail="Forbidden file destination path")
             
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
         return {"message": "File uploaded successfully", "path": str(file_path.relative_to(BASE_DIR))}
         
+    except HTTPException as he:
+        raise he
     except Exception as e:
         logger.error(f"Error uploading note: {e}")
         raise HTTPException(status_code=500, detail="File upload failed")

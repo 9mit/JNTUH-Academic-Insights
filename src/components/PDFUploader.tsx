@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useAcademic } from '../context/AcademicContext';
 import type { Regulation } from '../types';
 import { uploadPDFs, fetchByHallTicket } from '../api/client';
-import { FileUp, FileText, CheckCircle, Loader2, Sparkles, Trophy, PartyPopper, X, Search, Zap, ArrowRight } from 'lucide-react';
+import { FileUp, CheckCircle, Loader2, Sparkles, Trophy, PartyPopper, X, Paperclip } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -16,67 +16,65 @@ function CelebrationModal({ isOpen, onClose, studentName }: { isOpen: boolean; o
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4"
                 onClick={onClose}
             >
                 <motion.div
-                    initial={{ scale: 0.5, opacity: 0 }}
+                    initial={{ scale: 0.85, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.5, opacity: 0 }}
-                    transition={{ type: "spring", damping: 15 }}
-                    className="bg-gradient-to-br from-amber-500/20 via-bg-card to-emerald-500/20 rounded-3xl p-10 max-w-lg w-full border border-accent/30 relative overflow-hidden"
+                    exit={{ scale: 0.85, opacity: 0 }}
+                    transition={{ type: "spring", damping: 18 }}
+                    className="bg-gradient-to-br from-amber-500/10 via-slate-950 to-emerald-500/10 rounded-[32px] p-10 max-w-lg w-full border border-white/10 relative overflow-hidden shadow-2xl"
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="absolute -top-10 -left-10 w-40 h-40 bg-amber-400/20 rounded-full blur-3xl" />
-                    <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-emerald-400/20 rounded-full blur-3xl" />
+                    <div className="absolute -top-10 -left-10 w-40 h-40 bg-amber-400/10 rounded-full blur-3xl" />
+                    <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-emerald-400/10 rounded-full blur-3xl" />
 
-                    <button onClick={onClose} className="absolute top-4 right-4 text-text-muted hover:text-white transition-colors">
-                        <X className="w-6 h-6" />
+                    <button onClick={onClose} className="absolute top-6 right-6 text-text-muted hover:text-white transition-colors cursor-pointer">
+                        <X className="w-5 h-5" />
                     </button>
 
                     <div className="relative text-center">
                         <motion.div
                             initial={{ rotate: -10 }}
                             animate={{ rotate: [0, -10, 10, -10, 10, 0] }}
-                            transition={{ duration: 0.5, delay: 0.3 }}
-                            className="w-24 h-24 mx-auto rounded-3xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center shadow-2xl shadow-amber-500/30 mb-6"
+                            transition={{ duration: 0.6, delay: 0.3 }}
+                            className="w-20 h-20 mx-auto rounded-[24px] bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center shadow-xl shadow-amber-500/25 mb-6"
                         >
-                            <Trophy className="w-12 h-12 text-white" />
+                            <Trophy className="w-10 h-10 text-black" />
                         </motion.div>
 
-                        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}>
+                        <motion.div initial={{ y: 15, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}>
                             <div className="flex items-center justify-center gap-2 mb-3">
-                                <PartyPopper className="w-6 h-6 text-accent" />
-                                <h2 className="text-3xl font-black text-white">CONGRATULATIONS!</h2>
-                                <PartyPopper className="w-6 h-6 text-accent transform scale-x-[-1]" />
+                                <PartyPopper className="w-5 h-5 text-accent animate-bounce" />
+                                <h2 className="text-2xl font-black text-white tracking-tight font-heading">AMAZING WORK!</h2>
+                                <PartyPopper className="w-5 h-5 text-accent transform scale-x-[-1] animate-bounce" />
                             </div>
 
-                            {studentName && <p className="text-xl font-bold text-primary mb-4">{studentName}</p>}
+                            {studentName && <p className="text-lg font-bold text-primary mb-4 font-heading">{studentName}</p>}
 
-                            <p className="text-lg text-text-secondary mb-2">
-                                🎉 You've completed all <span className="text-white font-bold">4 years</span> with
+                            <p className="text-base text-text-secondary mb-2">
+                                You have finished all <span className="text-white font-bold">4 academic years</span> with
                             </p>
-                            <p className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 mb-6">
-                                ZERO Backlogs!
+                            <p className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 mb-6 font-heading tracking-wide">
+                                ABSOLUTELY ZERO BACKLOGS!
                             </p>
 
-                            <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
-                                <p className="text-text-muted text-sm leading-relaxed">
-                                    🌟 <span className="text-white font-semibold">Welcome to the Elite Club!</span> 🌟
+                            <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 text-left">
+                                <p className="text-text-muted text-xs leading-relaxed">
+                                    🌟 <span className="text-white font-semibold">Degree complete!</span> You have joined the prestigious tier of engineering graduates who maintained a clean slate all the way.
                                     <br /><br />
-                                    You've joined the rare species of engineers who never experienced the "thrill" of supplementary exams!
-                                    <br /><br />
-                                    <span className="text-accent font-semibold">Now go celebrate – you've earned it!</span> 🚀
+                                    Your efforts are highly impressive. Keep striving for this level of consistency! 🚀
                                 </p>
                             </div>
 
                             <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
+                                whileHover={{ scale: 1.03 }}
+                                whileTap={{ scale: 0.97 }}
                                 onClick={onClose}
-                                className="mt-8 px-8 py-3 bg-gradient-to-r from-amber-400 to-yellow-500 text-black font-bold rounded-xl shadow-lg shadow-amber-500/30"
+                                className="mt-8 px-6 py-3 bg-gradient-to-r from-amber-400 to-yellow-500 text-black font-bold rounded-xl shadow-lg shadow-amber-500/20 cursor-pointer w-full font-heading"
                             >
-                                Thanks, I'm Awesome! ✨
+                                Let's View My Dashboard! ✨
                             </motion.button>
                         </motion.div>
                     </div>
@@ -86,20 +84,14 @@ function CelebrationModal({ isOpen, onClose, studentName }: { isOpen: boolean; o
     );
 }
 
-type ImportMode = 'pdf' | 'htno';
-
-
 export default function PDFUploader() {
     const { importSemesters, setStudentInfo, setRegulation, setOfficialCGPA, clearAllData, data } = useAcademic();
-    const [mode, setMode] = useState<ImportMode>('pdf');
     const [isDragging, setIsDragging] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [showCelebration, setShowCelebration] = useState(false);
     const [htnoInput, setHtnoInput] = useState('');
 
-
     const processResults = useCallback((subjects: any[], backendSemesters: any[], htno: string, studentName?: string, officialCGPA?: number, detectedRegulation?: Regulation) => {
-        // Clear all previous data before importing new results
         clearAllData();
 
         const semesterMap: { [key: string]: any[] } = {};
@@ -147,45 +139,41 @@ export default function PDFUploader() {
 
                 let regulation: Regulation = detectedRegulation || 'R18';
 
-                // Fallback Auto-detect if not provided
-                if (!detectedRegulation) {
-                    const yearStr = htno.substring(0, 2);
-                    if (/^\d+$/.test(yearStr)) {
-                        const year = parseInt(yearStr);
-                        if (year >= 24) regulation = 'R24';
-                        else if (year >= 22) regulation = 'R22';
-                        else if (year >= 18) regulation = 'R18';
-                        else if (year >= 16) regulation = 'R16';
-                        else if (year === 15) regulation = 'R15';
-                        else if (year >= 13) regulation = 'R13';
-                    }
+                const yearStr = htno.substring(0, 2);
+                if (/^\d+$/.test(yearStr)) {
+                    const year = parseInt(yearStr);
+                    if (year >= 24) regulation = 'R24';
+                    else if (year >= 22) regulation = 'R22';
+                    else if (year >= 18) regulation = 'R18';
+                    else if (year >= 16) regulation = 'R16';
+                    else if (year === 15) regulation = 'R15';
+                    else if (year >= 13) regulation = 'R13';
                 }
 
                 setRegulation(regulation);
-                toast.success(`Detected Regulation: ${regulation}`, { icon: <Sparkles className="w-4 h-4 text-amber-400" /> });
+                toast.success(`Active regulation: ${regulation}`, { icon: <Sparkles className="w-4 h-4 text-amber-400" /> });
             }
 
-            // Set official CGPA if available
             if (typeof officialCGPA === 'number' && officialCGPA > 0) {
                 setOfficialCGPA(officialCGPA);
-                toast.success(`Used Official CGPA: ${officialCGPA}`, { icon: <Zap className="w-4 h-4 text-emerald-400" /> });
+                toast.success(`Using Official Cumulative GPA: ${officialCGPA}`, { icon: <Sparkles className="w-4 h-4 text-emerald-400" /> });
             }
 
-            toast.success(`Imported ${semestersToImport.length} semesters!`, {
+            toast.success(`Imported marks for ${semestersToImport.length} semesters!`, {
                 icon: <CheckCircle className="text-accent" />
             });
 
             if (semestersToImport.length >= 8 && !hasAnyFail) {
-                setTimeout(() => setShowCelebration(true), 1000);
+                setTimeout(() => setShowCelebration(true), 800);
             }
         }
     }, [clearAllData, importSemesters, setStudentInfo, setRegulation, setOfficialCGPA]);
-
 
     const handleFiles = useCallback(async (files: FileList | null) => {
         if (!files || files.length === 0) return;
 
         setIsProcessing(true);
+        const toastId = toast.loading('Reading marks files...');
         try {
             const fileArray = Array.from(files);
             const response = await uploadPDFs(fileArray);
@@ -199,9 +187,11 @@ export default function PDFUploader() {
                     response.official_cgpa,
                     response.regulation as Regulation
                 );
+                toast.dismiss(toastId);
             }
         } catch (error: any) {
-            toast.error(error.message || 'Import failed');
+            toast.dismiss(toastId);
+            toast.error(error.message || 'Failed to read result files');
         } finally {
             setIsProcessing(false);
         }
@@ -209,11 +199,12 @@ export default function PDFUploader() {
 
     const handleHtnoFetch = useCallback(async () => {
         if (!htnoInput.trim()) {
-            toast.error('Please enter a hall ticket number');
+            toast.error('Please type a student ID');
             return;
         }
 
         setIsProcessing(true);
+        const toastId = toast.loading(`Fetching grades for ${htnoInput}...`);
         try {
             const response = await fetchByHallTicket(htnoInput.trim());
 
@@ -226,20 +217,20 @@ export default function PDFUploader() {
                     response.official_cgpa,
                     response.regulation as Regulation
                 );
-                toast.success(`Found ${response.total_subjects} subjects for ${response.student_name || response.htno}!`);
+                toast.dismiss(toastId);
+                toast.success(`Welcome, ${response.student_name || response.htno}!`);
             }
         } catch (error: any) {
-            const errorMessage = error?.message || error?.toString() || '';
-            toast.error(errorMessage || 'Failed to fetch results');
-            
-            // Auto-switch to PDF mode if Vercel blocked the scraping
-            if (errorMessage.toLowerCase().includes('pdf upload') || errorMessage.toLowerCase().includes('blocking')) {
-                 setTimeout(() => setMode('pdf'), 1500); // Small delay so they read the toast first
-            }
+            toast.dismiss(toastId);
+            toast.error(error?.message || 'We could not fetch results for this student ID');
         } finally {
             setIsProcessing(false);
         }
     }, [htnoInput, processResults]);
+
+    const triggerFileSelect = () => {
+        document.getElementById('gemini-pdf-file')?.click();
+    };
 
     return (
         <>
@@ -249,154 +240,99 @@ export default function PDFUploader() {
                 studentName={data.studentName}
             />
 
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary/10 via-bg-card to-bg-card border border-primary/20 p-8">
-                {/* Decorative glow */}
-                <div className="absolute -top-20 -right-20 w-60 h-60 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
+            <div 
+                className="relative overflow-hidden rounded-[36px] bg-gradient-to-b from-white/[0.02] to-transparent border border-white/5 p-10 md:p-14 text-center select-none"
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={(e) => { e.preventDefault(); setIsDragging(false); handleFiles(e.dataTransfer.files); }}
+            >
+                {/* Glowing aesthetic orb behind the prompt bar */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
 
-                {/* Mode Toggle */}
-                <div className="relative flex gap-2 mb-8 p-1.5 bg-white/5 rounded-2xl w-fit">
-                    <button
-                        onClick={() => setMode('pdf')}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all
-                            ${mode === 'pdf'
-                                ? 'bg-gradient-to-r from-primary to-cyan-500 text-white shadow-lg'
-                                : 'text-text-muted hover:text-white'}`}
-                    >
-                        <FileUp className="w-4 h-4" />
-                        Upload PDFs
-                    </button>
-                    <button
-                        onClick={() => setMode('htno')}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all
-                            ${mode === 'htno'
-                                ? 'bg-gradient-to-r from-primary to-cyan-500 text-white shadow-lg'
-                                : 'text-text-muted hover:text-white'}`}
-                    >
-                        <Zap className="w-4 h-4" />
-                        Auto-Fetch
-                    </button>
-                </div>
+                <div className="max-w-2xl mx-auto space-y-8 relative z-10">
+                    <div className="space-y-3">
+                        <h1 className="text-4xl md:text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-primary via-accent to-cyan-300 font-heading">
+                            Hello, Student.
+                        </h1>
+                        <p className="text-sm md:text-base text-text-muted max-w-lg mx-auto font-medium">
+                            Let's discover your grades. Type your Hall Ticket ID or drop your JNTUH result PDFs directly below.
+                        </p>
+                    </div>
 
-                {/* HTNO Mode */}
-                {mode === 'htno' && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="relative"
-                    >
-                        <div className="flex flex-col md:flex-row items-center gap-6">
-                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center shadow-xl shadow-primary/20">
-                                <Search className="w-8 h-8 text-white" />
-                            </div>
+                    {/* Unified Gemini Prompt Bar */}
+                    <div className="relative w-full group">
+                        {/* Shifting Gradient Glow border */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-primary via-accent to-cyan-400 rounded-full blur-md opacity-10 group-hover:opacity-20 group-focus-within:opacity-25 transition-opacity duration-500" />
+                        
+                        <div className="relative flex items-center bg-[#07080b]/90 border border-white/10 rounded-full p-2.5 pl-6 shadow-2xl focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all duration-500">
+                            
+                            {/* File Upload Paperclip */}
+                            <button 
+                                onClick={triggerFileSelect}
+                                disabled={isProcessing}
+                                className="p-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-primary/20 hover:border-primary/40 hover:text-white text-text-muted transition-all mr-3 flex-shrink-0 cursor-pointer group disabled:opacity-50"
+                                title="Select JNTUH Result PDFs"
+                            >
+                                <Paperclip className="w-5 h-5 text-primary group-hover:scale-110 transition-transform duration-300" />
+                            </button>
 
-                            <div className="flex-1">
-                                <h2 className="text-2xl font-black text-white flex items-center gap-3 mb-2">
-                                    Auto-Fetch Results
-                                    <span className="text-xs font-bold px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full">NEW</span>
-                                </h2>
-                                <p className="text-text-muted">
-                                    Enter your hall ticket number and we'll automatically fetch all your results.
-                                </p>
-                            </div>
-                        </div>
+                            {/* Main Input Text Field */}
+                            <input
+                                type="text"
+                                value={htnoInput}
+                                onChange={(e) => setHtnoInput(e.target.value.toUpperCase())}
+                                placeholder="Type Hall Ticket ID... (or drop PDFs here)"
+                                className="flex-1 bg-transparent text-white font-mono font-bold placeholder:text-text-muted/50 focus:outline-none pr-4 text-base tracking-wide"
+                                onKeyDown={(e) => e.key === 'Enter' && handleHtnoFetch()}
+                                disabled={isProcessing}
+                            />
 
-                        <div className="mt-6 flex flex-col sm:flex-row gap-4">
-                            <div className="flex-1 relative">
-                                <input
-                                    type="text"
-                                    value={htnoInput}
-                                    onChange={(e) => setHtnoInput(e.target.value.toUpperCase())}
-                                    placeholder="Enter Hall Ticket (e.g., 20B91A05XX)"
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-white font-mono font-bold 
-                                               placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                                    onKeyDown={(e) => e.key === 'Enter' && handleHtnoFetch()}
-                                    disabled={isProcessing}
-                                />
-                            </div>
+                            {/* Hidden file input */}
+                            <input
+                                type="file"
+                                id="gemini-pdf-file"
+                                accept=".pdf"
+                                multiple
+                                onChange={(e) => handleFiles(e.target.files)}
+                                className="hidden"
+                            />
+
+                            {/* Go Button */}
                             <motion.button
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
+                                whileHover={{ scale: 1.03 }}
+                                whileTap={{ scale: 0.97 }}
                                 onClick={handleHtnoFetch}
                                 disabled={isProcessing}
-                                className="btn-primary px-8 flex items-center gap-3"
+                                className="bg-gradient-to-r from-primary to-accent text-white font-bold rounded-full py-3.5 px-6 flex items-center gap-2 hover:shadow-lg hover:shadow-primary/20 transition-all cursor-pointer flex-shrink-0 disabled:opacity-50 disabled:pointer-events-none"
                             >
                                 {isProcessing ? (
-                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    <Loader2 className="w-4 h-4 animate-spin" />
                                 ) : (
                                     <>
-                                        Fetch Results
-                                        <ArrowRight className="w-5 h-5" />
+                                        <Sparkles className="w-4 h-4" />
+                                        <span className="text-xs uppercase tracking-wider font-heading">Analyse</span>
                                     </>
                                 )}
                             </motion.button>
                         </div>
+                    </div>
 
-                        <p className="mt-4 text-xs text-text-muted">
-                            Please allow 10-20 seconds for fetching.
-                        </p>
-                    </motion.div>
-                )}
 
-                {/* PDF Mode */}
-                {mode === 'pdf' && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="relative group"
-                    >
-                        <input
-                            type="file"
-                            accept=".pdf"
-                            multiple
-                            onChange={(e) => handleFiles(e.target.files)}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                            onDragOver={() => setIsDragging(true)}
-                            onDragLeave={() => setIsDragging(false)}
-                            onDrop={() => setIsDragging(false)}
-                        />
+                </div>
 
-                        <div className="flex flex-col md:flex-row items-center gap-8">
-                            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center shadow-xl shadow-primary/20 group-hover:scale-110 transition-transform duration-300">
-                                {isProcessing ? (
-                                    <Loader2 className="w-10 h-10 text-white animate-spin" />
-                                ) : (
-                                    <FileUp className="w-10 h-10 text-white" />
-                                )}
+                {/* Ambient drag drop overlay */}
+                {isDragging && (
+                    <div className="absolute inset-0 bg-[#07080b]/90 backdrop-blur-lg flex items-center justify-center z-20 pointer-events-none border-2 border-dashed border-primary rounded-[36px] animate-pulse">
+                        <div className="text-center space-y-4">
+                            <div className="w-20 h-20 rounded-[24px] bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto shadow-2xl">
+                                <FileUp className="w-10 h-10 text-primary" />
                             </div>
-
-                            <div className="flex-1 text-center md:text-left">
-                                <h2 className="text-2xl font-black text-white flex items-center justify-center md:justify-start gap-3">
-                                    Upload Result PDFs
-                                    <Sparkles className="w-5 h-5 text-accent" />
-                                </h2>
-                                <p className="text-text-muted mt-2 max-w-md">
-                                    Drag & drop your JNTUH result PDFs here and we'll extract all grades automatically.
-                                </p>
-                                <div className="mt-5 flex flex-wrap justify-center md:justify-start gap-3">
-                                    <span className="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-full bg-white/5 border border-white/10 text-text-secondary">
-                                        <FileText className="w-4 h-4" />
-                                        Drag & Drop
-                                    </span>
-                                    <span className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full bg-accent/10 text-accent border border-accent/20">
-                                        Multi-file support
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div className="hidden lg:block">
-                                <button className="btn-primary pointer-events-none">Browse Files</button>
+                            <div>
+                                <p className="font-heading font-black text-xl text-white">Ready to load grades!</p>
+                                <p className="text-xs text-text-muted mt-1">Drop the PDFs to begin extraction</p>
                             </div>
                         </div>
-
-                        {isDragging && (
-                            <div className="absolute inset-0 bg-primary/10 backdrop-blur-sm flex items-center justify-center z-20 pointer-events-none border-2 border-primary rounded-3xl">
-                                <div className="text-center">
-                                    <FileUp className="w-12 h-12 text-primary mx-auto mb-2 animate-bounce" />
-                                    <p className="font-bold text-primary">Drop to Import</p>
-                                </div>
-                            </div>
-                        )}
-                    </motion.div>
+                    </div>
                 )}
             </div>
         </>
