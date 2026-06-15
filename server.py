@@ -56,9 +56,14 @@ BROWSER_SEMAPHORE: Optional[asyncio.Semaphore] = None
 THREAD_POOL: Optional[ThreadPoolExecutor] = None
 KEEP_ALIVE_TASK: Optional[asyncio.Task] = None
 
+# Toggle: set ENABLE_KEEP_ALIVE=true in Render env vars to activate keep-alive.
+# Currently disabled to conserve free-tier instance hours (June 2026).
+ENABLE_KEEP_ALIVE = os.environ.get("ENABLE_KEEP_ALIVE", "false").lower() == "true"
+
 
 # ==========================================
 # KEEP-ALIVE SELF-PING (prevents Render free-tier from sleeping)
+# Controlled by ENABLE_KEEP_ALIVE env var — set to "true" to activate.
 # ==========================================
 KEEP_ALIVE_INTERVAL = 10 * 60  # 10 minutes in seconds
 
@@ -113,8 +118,12 @@ async def lifespan(app: FastAPI):
     # Ensure upload dir exists
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Start keep-alive self-ping (only works on Render where RENDER_EXTERNAL_URL is set)
-    KEEP_ALIVE_TASK = asyncio.create_task(keep_alive_ping())
+    # Start keep-alive self-ping only if enabled via env var
+    if ENABLE_KEEP_ALIVE:
+        KEEP_ALIVE_TASK = asyncio.create_task(keep_alive_ping())
+        logger.info("Keep-alive self-ping ENABLED.")
+    else:
+        logger.info("Keep-alive self-ping DISABLED (set ENABLE_KEEP_ALIVE=true to activate).")
 
     logger.info("Application startup complete. Lifespan triggered successfully.")
     
