@@ -24,12 +24,31 @@ def is_production() -> bool:
 
 
 def get_cors_origins() -> list:
-    raw = os.environ.get("CORS_ORIGINS", "")
+    raw = os.environ.get("CORS_ORIGINS", "").strip()
     if raw:
-        return [o.strip() for o in raw.split(",") if o.strip()]
+        return [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
+
+    # Same-host deploys (Render + custom domain) often set RENDER_EXTERNAL_URL only
+    render_url = os.environ.get("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
+    if render_url:
+        origins = [render_url]
+        # Also allow apex/www-less twin if duckdns / custom domain is used via env
+        live = os.environ.get("PUBLIC_APP_URL", "").strip().rstrip("/")
+        if live and live not in origins:
+            origins.append(live)
+        return origins
+
     if is_production():
-        raise RuntimeError("CORS_ORIGINS must be set in production (comma-separated allowed origins).")
-    return ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8000"]
+        raise RuntimeError(
+            "CORS_ORIGINS (or RENDER_EXTERNAL_URL) must be set in production "
+            "(comma-separated allowed origins, e.g. https://jntuh-results.duckdns.org)."
+        )
+    return [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
 
 
 def validate_production_config() -> None:
@@ -38,8 +57,12 @@ def validate_production_config() -> None:
         return
 
     cors = os.environ.get("CORS_ORIGINS", "").strip()
-    if not cors:
-        raise RuntimeError("CORS_ORIGINS must be set in production.")
+    render_url = os.environ.get("RENDER_EXTERNAL_URL", "").strip()
+    if not cors and not render_url:
+        raise RuntimeError(
+            "Set CORS_ORIGINS or RENDER_EXTERNAL_URL in production "
+            "(e.g. CORS_ORIGINS=https://jntuh-results.duckdns.org)."
+        )
 
     share_secret = os.environ.get("SHARE_TOKEN_SECRET", "").strip()
     if not share_secret or share_secret == DEV_SHARE_SECRET:
