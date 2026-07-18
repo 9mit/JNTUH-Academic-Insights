@@ -29,17 +29,25 @@ except ImportError:
 from backend.data_processor import AcademicProcessor
 from backend.analyzer import AcademicAnalyzer
 from backend.shared import (
-    GRADE_POINTS_BY_REGULATION,
-    VALID_GRADES_BY_REGULATION,
     detect_regulation,
-    get_grade_points,
+)
+from backend.history_merge import (
+    merge_academic_histories,
+    normalize_htno_list,
+    annotate_same_ht_career,
+    dedupe_subjects_best_attempt,
+    consolidate_semester_rows,
+)
+from backend.dhethi_parse import (
+    flatten_academic_results,
+    flatten_all_results,
+    flatten_credits_checker,
 )
 from backend.share_tokens import create_share_token, verify_share_token
 from backend.notifications import fetch_notifications, filter_notifications
 from backend.calendars import fetch_calendars
 from backend.grace_marks import check_grace_eligibility
 from backend.study_packs import get_syllabus_gap, get_pyq_pack, list_pyq_packs
-from backend.non_credit import normalize_non_credit_subject
 from backend.security import (
     check_rate_limit,
     get_cors_origins,
@@ -324,7 +332,13 @@ class Subject(BaseModel):
     htno: Optional[str] = None
 
 class HallTicketRequest(BaseModel):
-    htno: str = Field(..., min_length=10, max_length=10, description="10-character Hall Ticket Number")
+    """Hall ticket. Same HT is used across detention → rejoin; regulation may change mid-career."""
+    htno: str = Field(..., min_length=10, max_length=24, description="10-character Hall Ticket Number")
+    related_htnos: List[str] = Field(default_factory=list, description="Optional; rarely needed")
+    force_refresh: bool = Field(
+        default=True,
+        description="Queue dhethi hardRefresh before fetch so post-detention exams are not stale",
+    )
 
 class SemesterSGPARecord(BaseModel):
     year: int = Field(..., ge=1, le=4)
@@ -436,123 +450,213 @@ def get_student_status_from_semesters(semesters: List[dict], subjects: List[dict
 # ==========================================
 # SCRAPING & PARSING SERVICES
 # ==========================================
-def fetch_api_and_parse(htno: str) -> dict:
-    """Fetches JNTUH results directly from the reliable REST API and formats it."""
-    url = f"https://jntuhresults.dhethi.com/api/getAcademicResult?rollNumber={htno}"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json',
-        'Origin': 'https://jntuhconnect.dhethi.com',
-        'Referer': 'https://jntuhconnect.dhethi.com/',
-        # Required by jntuhresults.dhethi.com (same key used by jntuhconnect frontend)
-        'X-Api-Key': os.environ.get('JNTUH_RESULTS_API_KEY', 'kanipinchinda'),
+DHETHI_BASE = "https://jntuhresults.dhethi.com"
+
+
+def _dhethi_headers() -> dict:
+    return {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Origin": "https://jntuhconnect.dhethi.com",
+        "Referer": "https://jntuhconnect.dhethi.com/",
+        "X-Api-Key": os.environ.get("JNTUH_RESULTS_API_KEY", "kanipinchinda"),
     }
-    
-    # Poll the API since it queues requests
-    max_attempts = 15
-    api_data = None
-    
+
+
+def trigger_dhethi_hard_refresh(htno: str) -> bool:
+    """Ask dhethi to re-scrape this roll number (queued). Returns True if accepted."""
+    url = f"{DHETHI_BASE}/api/hardRefresh?rollNumber={htno}"
+    try:
+        resp = requests.get(url, headers=_dhethi_headers(), timeout=20)
+        ok = resp.status_code in (200, 202)
+        logger.info(
+            "[API] hardRefresh %s → %s",
+            mask_hall_ticket(htno),
+            resp.status_code,
+        )
+        return ok
+    except requests.exceptions.RequestException as e:
+        logger.warning("[API] hardRefresh failed for %s: %s", mask_hall_ticket(htno), e)
+        return False
+
+
+def fetch_dhethi_json(path: str, htno: str, max_attempts: int = 15) -> Optional[dict]:
+    """
+    Poll dhethi JSON endpoint until 200 or attempts exhausted.
+    Returns None on soft failure (empty / still queued); raises HTTPException on hard 5xx-style failures.
+    """
+    url = f"{DHETHI_BASE}{path}?rollNumber={htno}"
+    headers = _dhethi_headers()
+    last_status = None
+
     for attempt in range(max_attempts):
         try:
             resp = requests.get(url, headers=headers, timeout=30)
+            last_status = resp.status_code
             if resp.status_code == 200:
-                api_data = resp.json()
-                break
-            elif resp.status_code == 202:
-                logger.info(f"[API] HTNO {htno} queued... waiting (attempt {attempt+1}/{max_attempts})")
+                data = resp.json()
+                if isinstance(data, dict):
+                    return data
+                return None
+            if resp.status_code == 202:
+                logger.info(
+                    "[API] %s %s queued... waiting (attempt %s/%s)",
+                    path,
+                    mask_hall_ticket(htno),
+                    attempt + 1,
+                    max_attempts,
+                )
                 time.sleep(3)
-            else:
-                logger.error(f"[API] Error {resp.status_code} for {htno}")
-                raise HTTPException(status_code=502, detail="Failed to fetch data from remote server.")
-        except requests.exceptions.RequestException as e:
-            logger.error(f"[API] Request exception for {htno}: {e}")
+                continue
+            if resp.status_code == 404:
+                return None
+            logger.error("[API] %s error %s for %s", path, resp.status_code, mask_hall_ticket(htno))
             if attempt == max_attempts - 1:
-                raise HTTPException(status_code=404, detail="Invalid Hall Ticket Number or No Results Found.")
+                raise HTTPException(status_code=502, detail="Failed to fetch data from remote server.")
             time.sleep(3)
-            
-    if not api_data or "results" not in api_data:
+        except HTTPException:
+            raise
+        except requests.exceptions.RequestException as e:
+            logger.error("[API] %s request exception for %s: %s", path, mask_hall_ticket(htno), e)
+            if attempt == max_attempts - 1:
+                return None
+            time.sleep(3)
+
+    logger.warning(
+        "[API] %s exhausted polls for %s (last_status=%s)",
+        path,
+        mask_hall_ticket(htno),
+        last_status,
+    )
+    return None
+
+
+def fetch_api_and_parse(htno: str, force_refresh: bool = True) -> dict:
+    """
+    Fetch full attempt history (getAllResult) + consolidated academic + credits.
+
+    getAllResult is the primary subject source (post-detention / multi-exam).
+    Academic overlays official SGPA/CGPA; credits checker overlays earned credits.
+    Optional hardRefresh forces dhethi to re-scrape before we read.
+    """
+    refreshed = False
+    if force_refresh:
+        refreshed = trigger_dhethi_hard_refresh(htno)
+        if refreshed:
+            # Give the upstream worker a moment to start before we poll
+            time.sleep(2)
+
+    attempts = 20 if force_refresh else 15
+
+    # Prefer attempt history first — this is what contains post-detention exams
+    all_json = fetch_dhethi_json("/api/getAllResult", htno, max_attempts=attempts)
+    academic_json = fetch_dhethi_json("/api/getAcademicResult", htno, max_attempts=attempts)
+    credits_json = fetch_dhethi_json("/api/getCreditsChecker", htno, max_attempts=8)
+
+    # If hardRefresh ran but both payloads are empty, one more short wait + retry
+    if force_refresh and not academic_json and not all_json:
+        time.sleep(4)
+        all_json = fetch_dhethi_json("/api/getAllResult", htno, max_attempts=10)
+        academic_json = fetch_dhethi_json("/api/getAcademicResult", htno, max_attempts=10)
+
+    if not academic_json and not all_json:
         raise HTTPException(status_code=404, detail="No results found or Invalid Hall Ticket Number.")
-        
-    # Transform api_data into the expected format
+
     detected_regulation = detect_regulation(htno)
-    student_name = api_data.get("details", {}).get("name", "Unknown")
-    
-    subjects = []
-    semesters = []
-    
-    raw_sems = api_data.get("results", {}).get("semesters", [])
-    for sem_data in raw_sems:
-        # semester string looks like "1-1", "4-2"
-        sem_str = sem_data.get("semester", "")
-        parts = sem_str.split("-")
-        try:
-            year, sem = int(parts[0]), int(parts[1])
-        except (ValueError, IndexError):
-            continue
-            
-        sem_subjects = sem_data.get("subjects", [])
-        for subj in sem_subjects:
-            grade = subj.get("grades", "").strip()
-            gp = get_grade_points(grade, detected_regulation)
-            code = subj.get("subjectCode", "").strip()
-            name = subj.get("subjectName", "").strip()
-
-            # Trust upstream API credits exactly (original logic). Do not invent pass credits.
-            # F/Ab often arrive as 0 — backlog planner may infer client-side without mutating earned totals.
-            try:
-                credits = float(subj.get("credits", 0.0) or 0.0)
-            except (TypeError, ValueError):
-                credits = 0.0
-            
-            # Extract marks if available in API; normalize non-credit Int/Ext swap
-            internal = subj.get("internalMarks")
-            external = subj.get("externalMarks")
-            total = subj.get("totalMarks")
-            normalized = normalize_non_credit_subject(internal, external, total, credits)
-
-            subject_row = {
-                "subject_code": code,
-                "subject_name": name,
-                "grade": grade,
-                "credits": normalized["credits"],
-                "grade_points": gp,
-                "year": year,
-                "sem": sem,
-                "htno": htno,
-                "regulation": detected_regulation,
-                "non_credit": bool(normalized.get("non_credit")),
-            }
-            if "internal" in normalized:
-                subject_row["internal"] = normalized["internal"]
-            if "external" in normalized:
-                subject_row["external"] = normalized["external"]
-            if "total" in normalized:
-                subject_row["total"] = normalized["total"]
-            subjects.append(subject_row)
-            
-        sgpa_val = float(sem_data.get("semesterSGPA", 0.0)) if str(sem_data.get("semesterSGPA")).replace('.', '', 1).isdigit() else 0.0
-
-        try:
-            sem_credits = float(sem_data.get("semesterCredits", 0.0) or 0.0)
-        except (TypeError, ValueError):
-            sem_credits = 0.0
-        
-        semesters.append({
-            "year": year,
-            "sem": sem,
-            "sgpa": sgpa_val,
-            "credits": sem_credits,
-        })
-        
+    subjects: List[dict] = []
+    semesters: List[dict] = []
     official_cgpa = None
-    cgpa_val = api_data.get("results", {}).get("CGPA")
-    if cgpa_val and str(cgpa_val).replace('.', '', 1).isdigit():
-        official_cgpa = float(cgpa_val)
-        
-    student_status = get_student_status_from_semesters(semesters, subjects, detected_regulation)
-    completed_semesters = len([s for s in semesters if s['sgpa'] > 0 or s['credits'] > 0])
-    
-    return {
+    student_name = "Unknown"
+    academic_sem_count = 0
+    all_sem_count = 0
+    all_attempt_rows = 0
+
+    # PRIMARY: every exam attempt
+    if all_json and all_json.get("results") is not None:
+        flat_all = flatten_all_results(all_json, htno, detected_regulation)
+        subjects.extend(flat_all["subjects"])
+        semesters.extend(flat_all["semesters"])
+        all_sem_count = int(flat_all.get("semester_count") or len(flat_all["semesters"]))
+        all_attempt_rows = int(flat_all.get("attempt_rows") or len(flat_all["subjects"]))
+        if flat_all.get("student_name"):
+            student_name = flat_all["student_name"]
+
+    # SECONDARY: consolidated academic (SGPA / CGPA / any subjects all missed)
+    if academic_json and "results" in academic_json:
+        flat = flatten_academic_results(academic_json, htno, detected_regulation)
+        subjects.extend(flat["subjects"])
+        academic_sem_count = len(flat["semesters"])
+        existing = {(int(s["year"]), int(s["sem"])) for s in semesters}
+        for s in flat["semesters"]:
+            key = (int(s["year"]), int(s["sem"]))
+            if key not in existing:
+                semesters.append(s)
+                existing.add(key)
+            else:
+                # Overlay non-zero official SGPA/credits onto matching shell
+                for row in semesters:
+                    if (int(row["year"]), int(row["sem"])) != key:
+                        continue
+                    try:
+                        sgpa = float(s.get("sgpa") or 0)
+                    except (TypeError, ValueError):
+                        sgpa = 0.0
+                    try:
+                        credits = float(s.get("credits") or 0)
+                    except (TypeError, ValueError):
+                        credits = 0.0
+                    if sgpa > 0:
+                        row["sgpa"] = sgpa
+                    if credits > 0:
+                        row["credits"] = credits
+                    break
+        if flat.get("official_cgpa") is not None:
+            official_cgpa = flat["official_cgpa"]
+        if student_name == "Unknown" and flat.get("student_name"):
+            student_name = flat["student_name"]
+
+    # Credits checker: fill missing semester earned-credits
+    if credits_json:
+        credit_map = flatten_credits_checker(credits_json)
+        existing = {(int(s["year"]), int(s["sem"])) for s in semesters}
+        for key, cred in credit_map.items():
+            if key not in existing:
+                semesters.append(
+                    {
+                        "year": key[0],
+                        "sem": key[1],
+                        "sgpa": 0.0,
+                        "credits": cred,
+                        "regulation": detected_regulation,
+                    }
+                )
+                existing.add(key)
+            elif cred > 0:
+                for row in semesters:
+                    if (int(row["year"]), int(row["sem"])) == key:
+                        if float(row.get("credits") or 0) <= 0:
+                            row["credits"] = cred
+                        break
+
+    if not subjects and not semesters:
+        raise HTTPException(status_code=404, detail="No results found or Invalid Hall Ticket Number.")
+
+    subjects = dedupe_subjects_best_attempt(subjects)
+    semesters = consolidate_semester_rows(semesters)
+
+    logger.info(
+        "[API] %s refresh=%s academic_semesters=%s all_semesters=%s all_attempts=%s "
+        "merged_subjects=%s merged_semesters=%s",
+        mask_hall_ticket(htno),
+        refreshed,
+        academic_sem_count,
+        all_sem_count,
+        all_attempt_rows,
+        len(subjects),
+        len(semesters),
+    )
+
+    raw_result = {
         "success": True,
         "htno": htno,
         "student_name": student_name,
@@ -561,10 +665,32 @@ def fetch_api_and_parse(htno: str) -> dict:
         "total_subjects": len(subjects),
         "official_cgpa": official_cgpa,
         "regulation": detected_regulation,
-        "student_status": student_status,
-        "completed_semesters": completed_semesters,
-        "total_semesters": 8
+        "regulations_seen": [detected_regulation],
+        "hall_tickets": [htno],
+        "student_status": "studying",
+        "completed_semesters": 0,
+        "total_semesters": 8,
+        "fetch_meta": {
+            "hard_refresh": refreshed,
+            "academic_semesters": academic_sem_count,
+            "all_semesters": all_sem_count,
+            "all_attempt_rows": all_attempt_rows,
+            "merged_subjects": len(subjects),
+        },
     }
+
+    annotated = annotate_same_ht_career(raw_result)
+    annotated["student_status"] = get_student_status_from_semesters(
+        annotated["semesters"], annotated["subjects"], annotated["regulation"]
+    )
+    annotated["total_semesters"] = 8
+    annotated["fetch_meta"] = {
+        **raw_result["fetch_meta"],
+        "merged_subjects": annotated.get("total_subjects", len(annotated.get("subjects") or [])),
+        "merged_semesters": len(annotated.get("semesters") or []),
+        "regulations_seen": annotated.get("regulations_seen"),
+    }
+    return annotated
 
 # ==========================================
 # ENDPOINTS
@@ -601,33 +727,53 @@ code{background:#f3f4f6;padding:.1rem .35rem;border-radius:4px}</style></head>
 
 @app.post("/fetch/htno")
 async def fetch_by_hall_ticket(request: HallTicketRequest):
-    htno = request.htno.strip().upper().replace(" ", "")
-    
-    if not re.match(r"^[0-9]{2}[A-Z0-9]{8}$", htno):
-        raise HTTPException(status_code=400, detail="Invalid Hall Ticket Number format. Must be 10 alphanumeric characters.")
-        
+    htnos = normalize_htno_list(request.htno, request.related_htnos)
+    if not htnos:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid Hall Ticket Number format. Must be 10 alphanumeric characters.",
+        )
+
     global THREAD_POOL
     if THREAD_POOL is None:
         logger.warning("THREAD_POOL was None. Initializing manually.")
         THREAD_POOL = ThreadPoolExecutor(max_workers=3)
-    
+
     try:
         loop = asyncio.get_running_loop()
-        try:
-            result = await loop.run_in_executor(THREAD_POOL, fetch_api_and_parse, htno)
-            logger.info(f"Successfully fetched {result['total_subjects']} subjects for {mask_hall_ticket(htno)} via REST API")
-            return result
-        except Exception as e:
-            # Re-raise HTTP exceptions explicitly defined in fetch_api_and_parse
-            if isinstance(e, HTTPException):
-                raise e
-            logger.error(f"API failure for {mask_hall_ticket(htno)}: {e}")
-            raise HTTPException(status_code=500, detail="Data provider failed. Please use PDF Upload.")
+        parts: List[dict] = []
+        errors: List[str] = []
+        for ht in htnos:
+            try:
+                part = await loop.run_in_executor(
+                    THREAD_POOL,
+                    lambda h=ht: fetch_api_and_parse(h, force_refresh=request.force_refresh),
+                )
+                parts.append(part)
+            except HTTPException as e:
+                errors.append(f"{ht}: {e.detail}")
+            except Exception as e:
+                errors.append(f"{ht}: {e}")
+
+        if not parts:
+            detail = errors[0] if len(errors) == 1 else (" | ".join(errors) or "Failed to fetch results")
+            raise HTTPException(status_code=404 if "No results" in detail or "Invalid" in detail else 502, detail=detail)
+
+        result = merge_academic_histories(parts, status_fn=get_student_status_from_semesters)
+        if errors:
+            result["partial_errors"] = errors
+        logger.info(
+            "Fetched %s subjects for %s (merged %s HT(s))",
+            result["total_subjects"],
+            ",".join(mask_hall_ticket(h) for h in result.get("hall_tickets") or htnos),
+            len(parts),
+        )
+        return result
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception(f"Unexpected error processing {mask_hall_ticket(htno)}")
+        logger.exception("Unexpected error processing hall ticket fetch")
         raise HTTPException(status_code=500, detail=f"Failed to fetch results: {str(e)}")
 
 
@@ -682,7 +828,17 @@ async def analyze_pdf(files: List[UploadFile] = File(...)):
 
         loop = asyncio.get_event_loop()
         try:
-            return await loop.run_in_executor(THREAD_POOL, parse_pdfs_sync, file_buffers)
+            raw = await loop.run_in_executor(THREAD_POOL, parse_pdfs_sync, file_buffers)
+            annotated = annotate_same_ht_career(raw)
+            annotated["processed_count"] = raw.get("processed_count")
+            annotated["cgpa"] = raw.get("cgpa")
+            annotated["percentage"] = raw.get("percentage")
+            annotated["backlogs_count"] = raw.get("backlogs_count")
+            annotated["student_status"] = get_student_status_from_semesters(
+                annotated["semesters"], annotated["subjects"], annotated["regulation"]
+            )
+            annotated["total_semesters"] = 8
+            return annotated
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:

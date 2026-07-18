@@ -1,5 +1,5 @@
 import { Trash2, PlusCircle, LayoutGrid, Info } from 'lucide-react';
-import type { Subject, Grade } from '../types';
+import type { Subject, Grade, Regulation } from '../types';
 import { useAcademic } from '../context/AcademicContext';
 import { getValidGradesForRegulation } from '../utils/regulationGrades';
 import { useMemo } from 'react';
@@ -8,15 +8,26 @@ interface DetailedModeTableProps {
     semester: {
         id: string;
         subjects: Subject[];
+        regulation?: Regulation;
     };
 }
 
 export default function DetailedModeTable({ semester }: DetailedModeTableProps) {
     const { addSubject, updateSubject, removeSubject, data } = useAcademic();
-    const grades = useMemo(
-        () => getValidGradesForRegulation(data.regulation).filter(g => g !== '-') as Grade[],
-        [data.regulation],
-    );
+    const semesterReg =
+        (semester as { regulation?: Regulation }).regulation || data.regulation;
+    const grades = useMemo(() => {
+        const base = getValidGradesForRegulation(semesterReg).filter(g => g !== '-') as Grade[];
+        const present = new Set(base);
+        // Keep grades already on subjects (mixed R16/R18 careers) selectable
+        for (const s of semester.subjects) {
+            if (s.grade && !present.has(s.grade as Grade)) {
+                present.add(s.grade as Grade);
+                base.push(s.grade as Grade);
+            }
+        }
+        return base;
+    }, [semesterReg, semester.subjects]);
 
     return (
         <div className="space-y-4">

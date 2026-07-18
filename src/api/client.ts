@@ -3,7 +3,8 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 // Default timeout for API requests (60 seconds for auto-fetch, 30 seconds for others)
 const DEFAULT_TIMEOUT = 30000;
-const AUTO_FETCH_TIMEOUT = 60000;
+/** hardRefresh + dual dhethi poll can exceed 60s */
+const AUTO_FETCH_TIMEOUT = 180000;
 
 /**
  * Helper to create a fetch request with timeout
@@ -68,23 +69,33 @@ export async function uploadPDFs(files: File[]) {
 
 
 
-export async function fetchByHallTicket(htno: string) {
-    // Validate hall ticket format
-    const cleanHtno = htno.trim().toUpperCase().replace(/\s/g, '');
-    
-    // Block null bytes, control characters, and non-alphanumeric content
-    if (/[\x00-\x1f\x7f]/.test(cleanHtno) || !/^[A-Z0-9]+$/.test(cleanHtno)) {
-        throw new Error('Hall ticket number contains invalid characters');
-    }
-    
-    if (cleanHtno.length !== 10) {
-        throw new Error('Hall ticket number must be exactly 10 alphanumeric characters');
+/** Parse a hall ticket (single HT; same number is kept after detention). */
+export function parseHallTicketInput(raw: string): { primary: string; related: string[] } {
+    const tokens = raw
+        .trim()
+        .toUpperCase()
+        .split(/[,;\s]+/)
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+    const valid: string[] = [];
+    for (const t of tokens) {
+        if (/[\x00-\x1f\x7f]/.test(t) || !/^[0-9]{2}[A-Z0-9]{8}$/.test(t)) {
+            continue;
+        }
+        if (!valid.includes(t)) valid.push(t);
+        if (valid.length >= 2) break;
     }
 
-    // Align with backend: YY + 8 alphanumeric (e.g. 20B91A0501)
-    if (!/^[0-9]{2}[A-Z0-9]{8}$/.test(cleanHtno)) {
-        throw new Error('Hall ticket must start with two digits followed by 8 alphanumeric characters');
+    if (valid.length === 0) {
+        throw new Error('Enter a valid 10-character hall ticket number');
     }
+
+    return { primary: valid[0], related: valid.slice(1) };
+}
+
+export async function fetchByHallTicket(htno: string, forceRefresh = true) {
+    const { primary, related } = parseHallTicketInput(htno);
 
     try {
         const response = await fetchWithTimeout(
@@ -92,9 +103,13 @@ export async function fetchByHallTicket(htno: string) {
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ htno: cleanHtno }),
+                body: JSON.stringify({
+                    htno: primary,
+                    related_htnos: related,
+                    force_refresh: forceRefresh,
+                }),
             },
-            AUTO_FETCH_TIMEOUT // Longer timeout for auto-fetch
+            AUTO_FETCH_TIMEOUT
         );
 
         if (!response.ok) {

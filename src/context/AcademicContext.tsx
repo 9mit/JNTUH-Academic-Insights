@@ -21,6 +21,14 @@ interface AcademicContextType {
     updateStudentInfo: (data: { name?: string; hallTicket?: string }) => void;
     setOfficialCGPA: (cgpa: number) => void;
     importSemesters: (semesters: Partial<Semester>[]) => void;
+    /** Atomic replace used by HT/PDF import (avoids clear+import race). */
+    replaceFromImport: (payload: {
+        semesters: Partial<Semester>[];
+        studentName?: string;
+        hallTicket?: string;
+        regulation?: Regulation;
+        officialCGPA?: number;
+    }) => void;
     hydrateAcademicData: (payload: AcademicData) => void;
     clearAllData: () => void;
 
@@ -191,6 +199,7 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
                             ...(typeof parsed.officialCredits === 'number'
                                 ? { officialCredits: parsed.officialCredits }
                                 : {}),
+                            ...(parsed.regulation ? { regulation: parsed.regulation } : {}),
                         };
                     } else if (parsed.manualSGPA !== undefined && parsed.manualSGPA !== null) {
                         newSemesters[idx] = {
@@ -198,6 +207,7 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
                             mode: 'manual',
                             manualSGPA: parsed.manualSGPA,
                             isExpanded: true,
+                            ...(parsed.regulation ? { regulation: parsed.regulation } : {}),
                         };
                     }
                 }
@@ -205,6 +215,57 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
 
             return { ...prev, semesters: newSemesters };
         });
+    }, []);
+
+    const replaceFromImport = useCallback((payload: {
+        semesters: Partial<Semester>[];
+        studentName?: string;
+        hallTicket?: string;
+        regulation?: Regulation;
+        officialCGPA?: number;
+    }) => {
+        const base = createEmptySemesters();
+        const merged = base.map((empty) => {
+            const match = payload.semesters.find((s) => s.year === empty.year && s.sem === empty.sem);
+            if (!match) return empty;
+            if (match.subjects && match.subjects.length > 0) {
+                return {
+                    ...empty,
+                    mode: 'detailed' as const,
+                    subjects: match.subjects.map((sub) => ({
+                        ...sub,
+                        id: sub.id || generateId(),
+                    })),
+                    isExpanded: true,
+                    manualSGPA: null,
+                    ...(typeof match.officialCredits === 'number'
+                        ? { officialCredits: match.officialCredits }
+                        : {}),
+                    ...(match.regulation ? { regulation: match.regulation } : {}),
+                };
+            }
+            if (match.manualSGPA !== undefined && match.manualSGPA !== null) {
+                return {
+                    ...empty,
+                    mode: 'manual' as const,
+                    manualSGPA: match.manualSGPA,
+                    subjects: [],
+                    isExpanded: true,
+                    ...(match.regulation ? { regulation: match.regulation } : {}),
+                };
+            }
+            return empty;
+        });
+        setData({
+            regulation: payload.regulation || 'R22',
+            semesters: merged,
+            studentName: payload.studentName || '',
+            hallTicket: payload.hallTicket || '',
+            ...(typeof payload.officialCGPA === 'number' && payload.officialCGPA > 0
+                ? { official_cgpa: payload.officialCGPA }
+                : {}),
+        });
+        void purgeClientStorage();
     }, []);
 
     const hydrateAcademicData = useCallback((payload: AcademicData) => {
@@ -224,6 +285,7 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
                 ...(typeof match.officialCredits === 'number'
                     ? { officialCredits: match.officialCredits }
                     : {}),
+                ...(match.regulation ? { regulation: match.regulation } : {}),
             };
         });
         setData({
@@ -285,6 +347,7 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
         updateStudentInfo,
         setOfficialCGPA,
         importSemesters,
+        replaceFromImport,
         hydrateAcademicData,
         clearAllData,
         getSGPA,
@@ -302,6 +365,7 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
         updateStudentInfo,
         setOfficialCGPA,
         importSemesters,
+        replaceFromImport,
         hydrateAcademicData,
         clearAllData,
         getSGPA,

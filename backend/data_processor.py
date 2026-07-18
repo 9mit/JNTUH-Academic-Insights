@@ -149,9 +149,15 @@ class AcademicProcessor:
         # But usually JNTUH memos have headers. If extracted text is messy, validation will help.
         
         # Process sections. detailed logic needs to be stateful because split includes delimiters
-        from backend.shared import detect_regulation, get_grade_points, VALID_GRADES_BY_REGULATION
-        regulation = detect_regulation(self.student_info.get('htno', ''))
-        valid_grades = VALID_GRADES_BY_REGULATION.get(regulation, VALID_GRADES_BY_REGULATION["R18"])
+        from backend.shared import (
+            detect_regulation,
+            get_grade_points,
+            valid_grades_union,
+            resolve_subject_regulation,
+        )
+        ht_regulation = detect_regulation(self.student_info.get('htno', ''))
+        # Accept grades from both old and modern schemes (detention / multi-memo uploads)
+        valid_grades = valid_grades_union(ht_regulation)
         
         for section in semester_sections:
             header_match = self._parse_semester_header(section)
@@ -169,9 +175,10 @@ class AcademicProcessor:
                     line=line,
                     current_year=current_year,
                     current_sem=current_sem,
-                    regulation=regulation,
+                    regulation=ht_regulation,
                     valid_grades=valid_grades,
                     get_grade_points_fn=get_grade_points,
+                    resolve_reg_fn=resolve_subject_regulation,
                 )
                 if parsed_subject:
                     subjects.append(parsed_subject)
@@ -186,6 +193,7 @@ class AcademicProcessor:
         regulation: str,
         valid_grades: List[str],
         get_grade_points_fn,
+        resolve_reg_fn=None,
     ) -> Optional[Dict]:
         line = re.sub(r"\s+", " ", line).strip()
         if not line:
@@ -229,13 +237,17 @@ class AcademicProcessor:
         if grade_idx is None or grade is None:
             return None
 
+        subject_reg = regulation
+        if resolve_reg_fn is not None:
+            subject_reg = resolve_reg_fn(grade, regulation)
+
         numeric_after_grade: List[float] = []
         for token in parts[grade_idx + 1:]:
             parsed_number = self._parse_credit_token(token)
             if parsed_number is not None:
                 numeric_after_grade.append(parsed_number)
 
-        expected_grade_point = float(get_grade_points_fn(grade, regulation))
+        expected_grade_point = float(get_grade_points_fn(grade, subject_reg))
         if len(numeric_after_grade) > 1 and numeric_after_grade[0] == expected_grade_point:
             numeric_after_grade = numeric_after_grade[1:]
 
@@ -270,7 +282,7 @@ class AcademicProcessor:
         external_int = int(external) if external and external.isdigit() else None
         total_int = int(total) if total and total.isdigit() else None
 
-        inferred_credits = self._infer_credits(code, name, current_year, current_sem, regulation)
+        inferred_credits = self._infer_credits(code, name, current_year, current_sem, subject_reg)
         if credits is None or inferred_credits == 0.0:
             credits = inferred_credits
 
@@ -285,8 +297,8 @@ class AcademicProcessor:
             'subject_name': name,
             'grade': grade,
             'credits': normalized['credits'],
-            'grade_points': get_grade_points_fn(grade, regulation),
-            'regulation': regulation,
+            'grade_points': get_grade_points_fn(grade, subject_reg),
+            'regulation': subject_reg,
             'non_credit': bool(normalized.get('non_credit')),
         }
 

@@ -20,6 +20,7 @@ interface BackendSubject {
     total?: number;
     official_sem_sgpa?: number;
     non_credit?: boolean;
+    regulation?: string;
 }
 
 interface BackendSemester {
@@ -27,6 +28,7 @@ interface BackendSemester {
     sem: number;
     sgpa: number;
     credits?: number;
+    regulation?: string;
 }
 
 // Celebratory Modal Component
@@ -108,7 +110,7 @@ function CelebrationModal({ isOpen, onClose, studentName }: { isOpen: boolean; o
 }
 
 export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () => void }) {
-    const { importSemesters, setStudentInfo, setRegulation, setOfficialCGPA, clearAllData, data } = useAcademic();
+    const { replaceFromImport, data } = useAcademic();
     const [isDragging, setIsDragging] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [showCelebration, setShowCelebration] = useState(false);
@@ -120,10 +122,10 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
         htno: string,
         studentName?: string,
         officialCGPA?: number,
-        detectedRegulation?: Regulation
+        detectedRegulation?: Regulation,
+        regulationsSeen?: string[],
+        fetchMeta?: { academic_semesters?: number; all_semesters?: number; hard_refresh?: boolean }
     ) => {
-        clearAllData();
-
         const semesterMap: { [key: string]: Subject[] } = {};
         let hasAnyFail = false;
 
@@ -146,6 +148,8 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                 credits: subject.non_credit ? 0 : rawCredits,
             });
 
+            const subReg = subject.regulation as Regulation | undefined;
+
             semesterMap[key].push({
                 id: generateId(),
                 code: subject.subject_code,
@@ -156,19 +160,26 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                 ...(normalized.external !== undefined ? { external: normalized.external } : {}),
                 ...(normalized.total !== undefined ? { total: normalized.total } : {}),
                 ...(normalized.nonCredit ? { nonCredit: true } : {}),
-                official_sem_sgpa: subject.official_sem_sgpa
+                official_sem_sgpa: subject.official_sem_sgpa,
+                ...(subReg ? { regulation: subReg } : {}),
             });
         });
 
-        const semestersToImport = Object.entries(semesterMap).map(([key, subjects]) => {
+        const semestersToImport = Object.entries(semesterMap).map(([key, semSubjects]) => {
             const [year, sem] = key.split('-').map(Number);
-            const backendSem = backendSemesters?.find((s) => s.year === year && s.sem === sem);
-            const hasTrustedOfficialSGPA = subjects.some(
+            const backendMatches = (backendSemesters || []).filter(
+                (s) => s.year === year && s.sem === sem
+            );
+            const backendSem =
+                [...backendMatches].reverse().find(
+                    (s) => (typeof s.sgpa === 'number' && s.sgpa > 0) || (typeof s.credits === 'number' && s.credits > 0)
+                ) || backendMatches[backendMatches.length - 1] || backendMatches[0];
+            const hasTrustedOfficialSGPA = semSubjects.some(
                 (subject) => typeof subject.official_sem_sgpa === 'number' && subject.official_sem_sgpa > 0
             );
 
-            if (!hasTrustedOfficialSGPA && typeof backendSem?.sgpa === 'number' && subjects.length > 0) {
-                subjects[0].official_sem_sgpa = backendSem.sgpa;
+            if (!hasTrustedOfficialSGPA && typeof backendSem?.sgpa === 'number' && semSubjects.length > 0) {
+                semSubjects[0].official_sem_sgpa = backendSem.sgpa;
             }
 
             const officialCredits =
@@ -176,25 +187,33 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                     ? backendSem.credits
                     : undefined;
 
+            const regCounts = new Map<string, number>();
+            for (const s of semSubjects) {
+                if (s.regulation) {
+                    regCounts.set(s.regulation, (regCounts.get(s.regulation) || 0) + 1);
+                }
+            }
+            let semesterRegulation: Regulation | undefined =
+                (backendSem?.regulation as Regulation | undefined) || undefined;
+            if (!semesterRegulation && regCounts.size > 0) {
+                semesterRegulation = [...regCounts.entries()].sort((a, b) => b[1] - a[1])[0][0] as Regulation;
+            }
+
             return {
                 id: key,
                 year,
                 sem,
-                subjects,
+                subjects: semSubjects,
                 isExpanded: false,
                 mode: 'detailed' as const,
                 ...(officialCredits !== undefined ? { officialCredits } : {}),
+                ...(semesterRegulation ? { regulation: semesterRegulation } : {}),
             };
         });
 
         if (semestersToImport.length > 0) {
-            importSemesters(semestersToImport);
-
-            if (htno) {
-                setStudentInfo(studentName || '', htno);
-
-                let regulation: Regulation = detectedRegulation || 'R18';
-
+            let regulation: Regulation = detectedRegulation || 'R18';
+            if (!detectedRegulation && htno) {
                 const yearStr = htno.substring(0, 2);
                 if (/^\d+$/.test(yearStr)) {
                     const year = parseInt(yearStr);
@@ -206,19 +225,63 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                     else if (year === 15) regulation = 'R15';
                     else if (year >= 13) regulation = 'R13';
                 }
+            }
 
-                setRegulation(regulation);
+            replaceFromImport({
+                semesters: semestersToImport,
+                studentName: studentName || '',
+                hallTicket: htno || '',
+                regulation,
+                officialCGPA,
+            });
+
+            const seen = (regulationsSeen || []).filter(Boolean);
+            if (seen.length > 1) {
+                toast.success(`Multi-regulation career: ${seen.join(' → ')}`, {
+                    icon: <Sparkles className="w-4 h-4 text-amber-400" />,
+                    duration: 5000,
+                });
+            } else {
                 toast.success(`Active regulation: ${regulation}`, { icon: <Sparkles className="w-4 h-4 text-amber-400" /> });
             }
 
             if (typeof officialCGPA === 'number' && officialCGPA > 0) {
-                setOfficialCGPA(officialCGPA);
                 toast.success(`Using Official Cumulative GPA: ${officialCGPA}`, { icon: <Sparkles className="w-4 h-4 text-emerald-400" /> });
             }
 
-            toast.success(`Imported marks for ${semestersToImport.length} semesters!`, {
+            const filledSemesters = semestersToImport
+                .filter((s) => (s.subjects?.length || 0) > 0)
+                .sort((a, b) => a.year - b.year || a.sem - b.sem);
+            const filled = filledSemesters.length;
+            const latest = filledSemesters[filledSemesters.length - 1];
+            const latestLabel = latest ? `${latest.year}-${latest.sem}` : null;
+
+            toast.success(`Imported marks for ${filled} semesters!`, {
                 icon: <CheckCircle className="text-accent" />
             });
+
+            if (latestLabel && filled < 8) {
+                toast(
+                    `Latest semester on record: ${latestLabel} (${filled}/8). Later semis appear when JNTUH/dhethi publish them.`,
+                    { duration: 6000, icon: <Sparkles className="w-4 h-4 text-sky-400" /> }
+                );
+            }
+
+            if (fetchMeta) {
+                const acad = fetchMeta.academic_semesters ?? 0;
+                const all = fetchMeta.all_semesters ?? 0;
+                if (all > acad) {
+                    toast.success(
+                        `Loaded full exam history (${all} semis vs ${acad} consolidated)`,
+                        { duration: 4500 }
+                    );
+                } else if (fetchMeta.hard_refresh) {
+                    toast.success(
+                        `Refreshed upstream cache · ${all || filled} semester(s) on record`,
+                        { duration: 4000 }
+                    );
+                }
+            }
 
             onImportSuccess?.();
 
@@ -226,7 +289,7 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                 setTimeout(() => setShowCelebration(true), 800);
             }
         }
-    }, [clearAllData, importSemesters, setStudentInfo, setRegulation, setOfficialCGPA, onImportSuccess, data.regulation]);
+    }, [replaceFromImport, onImportSuccess]);
 
     const handleFiles = useCallback(async (files: FileList | null) => {
         if (!files || files.length === 0) return;
@@ -264,9 +327,11 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
         }
 
         setIsProcessing(true);
-        const toastId = toast.loading(`Fetching grades for ${htnoInput}...`);
+        const toastId = toast.loading(
+            `Refreshing & fetching full history for ${htnoInput.trim().toUpperCase()}… (may take up to 2 min)`
+        );
         try {
-            const response = await fetchByHallTicket(htnoInput.trim());
+            const response = await fetchByHallTicket(htnoInput.trim(), true);
 
             if (response.success && response.subjects) {
                 processResults(
@@ -275,7 +340,11 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                     response.htno,
                     response.student_name,
                     response.official_cgpa,
-                    response.regulation as Regulation
+                    response.regulation as Regulation,
+                    response.regulations_seen as string[] | undefined,
+                    response.fetch_meta as
+                        | { academic_semesters?: number; all_semesters?: number; hard_refresh?: boolean }
+                        | undefined
                 );
                 toast.dismiss(toastId);
                 toast.success(`Welcome, ${response.student_name || response.htno}!`);
@@ -316,7 +385,7 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                             Import your results
                         </h1>
                         <p className="text-sm md:text-[0.95rem] text-text-muted max-w-md mx-auto leading-relaxed">
-                            Enter a hall ticket or drop memo PDFs. We parse semesters, detect regulation, and sync this session.
+                            Enter a hall ticket or drop memo PDFs. We parse every semester on that HT — including after detention under a new regulation.
                         </p>
                     </div>
 

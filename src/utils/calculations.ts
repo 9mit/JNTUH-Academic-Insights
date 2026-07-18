@@ -7,6 +7,14 @@ function gradePoints(grade: Subject['grade'], regulation?: Regulation): number {
     return regulation ? getGradePointsForRegulation(grade, regulation) : (GRADE_POINTS[grade] ?? 0);
 }
 
+/** Prefer per-semester regulation (detention / readmission), else global session regulation. */
+export function resolveRegulation(
+    semester: Semester | undefined | null,
+    global?: Regulation | null,
+): Regulation | undefined {
+    return semester?.regulation ?? global ?? undefined;
+}
+
 /**
  * Normalizes subject identifier to heavily reduce duplicate tracking issues.
  */
@@ -114,13 +122,14 @@ export function calculateSGPA(subjects: Subject[], regulation?: Regulation): Cal
  * 3. Calculated from subject data (fallback)
  */
 export function getSemesterSGPA(semester: Semester, regulation?: Regulation): number {
+    const reg = resolveRegulation(semester, regulation);
     // Manual mode: user enters their SGPA
     if (semester.mode === 'manual') {
         return semester.manualSGPA ?? 0;
     }
 
     // Detailed mode: prefer official SGPA if available
-    const officialSubject = getBestSubjects(semester.subjects, regulation).find(
+    const officialSubject = getBestSubjects(semester.subjects, reg).find(
         s => s.official_sem_sgpa !== undefined && s.official_sem_sgpa > 0
     );
     if (officialSubject?.official_sem_sgpa) {
@@ -128,7 +137,7 @@ export function getSemesterSGPA(semester: Semester, regulation?: Regulation): nu
     }
 
     // Fallback: calculate from subjects using scraped credits
-    return calculateSGPA(semester.subjects, regulation).sgpa;
+    return calculateSGPA(semester.subjects, reg).sgpa;
 }
 
 /**
@@ -137,13 +146,14 @@ export function getSemesterSGPA(semester: Semester, regulation?: Regulation): nu
  * (e.g. electives listed with credits that are not in the semester total).
  */
 export function getSemesterCredits(semester: Semester, regulation?: Regulation): number {
+    const reg = resolveRegulation(semester, regulation);
     if (semester.mode === 'manual') {
-        return getStandardSemesterCredits(regulation);
+        return getStandardSemesterCredits(reg);
     }
     if (typeof semester.officialCredits === 'number' && semester.officialCredits > 0) {
         return semester.officialCredits;
     }
-    return calculateSGPA(semester.subjects, regulation).totalCredits;
+    return calculateSGPA(semester.subjects, reg).totalCredits;
 }
 
 /**
@@ -151,7 +161,9 @@ export function getSemesterCredits(semester: Semester, regulation?: Regulation):
  * Formula: Sum(semesterCredits * semesterSGPA) / Sum(totalCredits)
  */
 export function calculateCGPA(semesters: Semester[], regulation?: Regulation): CGPAResult {
-    const validSemesters = semesters.filter(sem => hasSemesterData(sem) && getSemesterCredits(sem, regulation) > 0);
+    const validSemesters = semesters.filter(
+        sem => hasSemesterData(sem) && getSemesterCredits(sem, regulation) > 0
+    );
 
     if (validSemesters.length === 0) {
         return { cgpa: 0, isWeighted: true, totalCredits: 0, percentage: 0 };
@@ -302,11 +314,11 @@ export function getCreditsStats(
 ): { earned: number; lost: number } {
     let earned = 0;
     let lost = 0;
-    const manualCredits = getStandardSemesterCredits(regulation);
 
     for (const semester of semesters) {
+        const reg = resolveRegulation(semester, regulation);
         if (semester.mode === 'detailed') {
-            const result = calculateSGPA(semester.subjects, regulation);
+            const result = calculateSGPA(semester.subjects, reg);
             lost += result.lostCredits;
             if (typeof semester.officialCredits === 'number' && semester.officialCredits > 0) {
                 earned += Math.max(0, semester.officialCredits - result.lostCredits);
@@ -314,7 +326,7 @@ export function getCreditsStats(
                 earned += result.earnedCredits;
             }
         } else if (semester.mode === 'manual' && (semester.manualSGPA ?? 0) > 0) {
-            earned += manualCredits;
+            earned += getStandardSemesterCredits(reg);
         }
     }
 
@@ -327,13 +339,15 @@ export function getYearEarnedCredits(
     year: number,
     regulation?: Regulation
 ): number {
-    const manualCredits = getStandardSemesterCredits(regulation);
     return semesters
         .filter((s) => s.year === year)
         .reduce((sum, s) => {
             if (!hasSemesterData(s)) return sum;
-            if (s.mode === 'manual') return sum + ((s.manualSGPA ?? 0) > 0 ? manualCredits : 0);
-            const result = calculateSGPA(s.subjects, regulation);
+            const reg = resolveRegulation(s, regulation);
+            if (s.mode === 'manual') {
+                return sum + ((s.manualSGPA ?? 0) > 0 ? getStandardSemesterCredits(reg) : 0);
+            }
+            const result = calculateSGPA(s.subjects, reg);
             if (typeof s.officialCredits === 'number' && s.officialCredits > 0) {
                 return sum + Math.max(0, s.officialCredits - result.lostCredits);
             }
@@ -428,6 +442,16 @@ export function getCompletedSemesterCount(semesters: Semester[]): number {
     return semesters.filter(sem => hasSemesterData(sem)).length;
 }
 
+/** Highest year-sem slot that has imported marks (e.g. "3-1"). */
+export function getLatestSemesterOnRecord(semesters: Semester[]): string | null {
+    const filled = semesters
+        .filter(hasSemesterData)
+        .sort((a, b) => a.year - b.year || a.sem - b.sem);
+    if (filled.length === 0) return null;
+    const last = filled[filled.length - 1];
+    return `${last.year}-${last.sem}`;
+}
+
 /**
  * Determine student's graduation status
  * Returns: "graduated" | "graduated_with_backlogs" | "studying"
@@ -458,6 +482,7 @@ export function getStatusLabel(semesters: Semester[], _regulation: Regulation = 
     const status = getStudentStatus(semesters, _regulation);
     const completedCount = getCompletedSemesterCount(semesters);
     const backlogs = getBacklogs(semesters);
+    const latest = getLatestSemesterOnRecord(semesters);
 
     switch (status) {
         case 'graduated':
@@ -465,7 +490,9 @@ export function getStatusLabel(semesters: Semester[], _regulation: Regulation = 
         case 'graduated_with_backlogs':
             return `✓ Graduated with ${backlogs.length} Backlog(s) (${completedCount}/8 semesters)`;
         case 'studying':
-            return `→ Currently Studying (${completedCount}/8 semesters)`;
+            return latest
+                ? `→ Currently Studying (${completedCount}/8 · latest on record ${latest})`
+                : `→ Currently Studying (${completedCount}/8 semesters)`;
         default:
             return 'Status Unknown';
     }

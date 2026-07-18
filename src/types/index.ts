@@ -16,6 +16,8 @@ export interface Subject {
     /** Audit / mandatory non-credit course (excluded from GPA & credit stats) */
     nonCredit?: boolean;
     official_sem_sgpa?: number; // Official SGPA from memo
+    /** Per-subject regulation when career spans multiple schemes */
+    regulation?: Regulation;
 }
 
 export interface Semester {
@@ -28,6 +30,8 @@ export interface Semester {
     isExpanded: boolean;
     /** Official semester credits from JNTUH API (semesterCredits), when available */
     officialCredits?: number;
+    /** Regulation that applies to this semester (detention / readmission) */
+    regulation?: Regulation;
 }
 
 export interface AcademicData {
