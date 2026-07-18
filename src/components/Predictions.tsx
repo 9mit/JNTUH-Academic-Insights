@@ -3,6 +3,7 @@ import { useAcademic } from '../context/AcademicContext';
 import { generateHeuristicInsights, getRequiredSGPAForTarget } from '../utils/heuristicInsights';
 import { predictSGPA } from '../api/client';
 import { getSemesterSGPA } from '../utils/calculations';
+import { getStandardSemesterCredits } from '../constants/grading';
 import WhatIfCalculator from './WhatIfCalculator';
 import EligibilityChecker from './EligibilityChecker';
 import SemesterGoals from './SemesterGoals';
@@ -75,7 +76,13 @@ export default function Predictions() {
 
     // Calculate target when inputs change
     const handleCalculateTarget = () => {
-        const result = getRequiredSGPAForTarget(data.semesters, targetCGPA, remainingSemesters, 20, data.regulation);
+        const result = getRequiredSGPAForTarget(
+            data.semesters,
+            targetCGPA,
+            remainingSemesters,
+            getStandardSemesterCredits(data.regulation),
+            data.regulation,
+        );
         setTargetResult(result);
     };
 

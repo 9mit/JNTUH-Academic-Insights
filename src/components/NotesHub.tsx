@@ -391,6 +391,7 @@ export default function NotesHub() {
                                             <option value="R18">R18</option>
                                             <option value="R22">R22</option>
                                             <option value="R24">R24</option>
+                                            <option value="R25">R25</option>
                                         </select>
                                     </div>
                                     <div>

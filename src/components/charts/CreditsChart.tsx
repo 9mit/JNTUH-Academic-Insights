@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import { useAcademic } from '../../context/AcademicContext';
 import { getCreditsStats } from '../../utils/calculations';
-import { REGULATION_CREDITS } from '../../constants/grading';
+import { getRequiredCredits } from '../../constants/grading';
 import type { Regulation } from '../../types';
 
 export default function CreditsChart() {
@@ -15,8 +15,7 @@ export default function CreditsChart() {
     const regulation = data.regulation as Regulation;
     const { earned, lost } = getCreditsStats(data.semesters, regulation);
 
-    // Get total required credits for this regulation (defaults to 160)
-    const requiredCredits = REGULATION_CREDITS[regulation] || 160;
+    const requiredCredits = getRequiredCredits(regulation);
     const attempted = earned + lost;
     const remaining = Math.max(0, requiredCredits - earned);
     const progressPercent = Math.min(100, (earned / requiredCredits) * 100);

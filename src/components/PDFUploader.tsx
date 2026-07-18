@@ -198,7 +198,8 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                 const yearStr = htno.substring(0, 2);
                 if (/^\d+$/.test(yearStr)) {
                     const year = parseInt(yearStr);
-                    if (year >= 24) regulation = 'R24';
+                    if (year >= 25) regulation = 'R25';
+                    else if (year >= 24) regulation = 'R24';
                     else if (year >= 22) regulation = 'R22';
                     else if (year >= 18) regulation = 'R18';
                     else if (year >= 16) regulation = 'R16';

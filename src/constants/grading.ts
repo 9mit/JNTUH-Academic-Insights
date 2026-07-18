@@ -33,22 +33,46 @@ export const GRADE_COLORS: Record<Grade, string> = {
     'Ab': '#ef4444',
 };
 
-// Standard credits per semester (for manual mode)
+// Legacy R18 default — prefer getStandardSemesterCredits(regulation) at call sites
 export const STANDARD_CREDITS = 20;
 
-// Official JNTUH credits required per regulation (for degree)
-// Source: JNTUH Academic Regulations
+// Official JNTUH credits required per regulation (degree minimum to award B.Tech).
+// Prefer official memo SGPA/CGPA; earned credits use API semesterCredits so extras
+// that inflate subject rows do not inflate degree progress. Year bars = distribution only.
+// Sources: R13/R15/R16/R18/R22/R25 academic regulation PDFs (jntuh.ac.in and affiliates).
 export const REGULATION_CREDITS: Record<Regulation, number> = {
-    'R13': 216,  // 224 registered, 216 required for degree
-    'R15': 200,  // Transition regulation
-    'R16': 180,  // First CBCS regulation (original)
-    'R18': 160,  // AICTE model curriculum
-    'R22': 160,  // Latest regulation
-    'R24': 160,  // Follows R22 pattern
+    'R13': 216,  // register 224, secure 216
+    'R15': 218,  // register 226, secure 218
+    'R16': 192,  // 24 credits × 8 semesters
+    'R18': 160,
+    'R22': 160,
+    'R24': 160,  // transitional alias (no standalone R24 PDF; colleges sometimes use R24 label)
+    'R25': 160,  // register 164, earn ≥160
 };
 
+/** Credits registered in course structure (when different from earn minimum) */
+export const REGULATION_REGISTERED_CREDITS: Partial<Record<Regulation, number>> = {
+    'R13': 224,
+    'R15': 226,
+    'R25': 164,
+};
+
+/** Default when regulation is unknown / empty */
+export const DEFAULT_REGULATION: Regulation = 'R18';
+
+/** Degree credit minimum for a regulation (never hardcode 160/180/etc. at call sites) */
+export function getRequiredCredits(regulation: Regulation | string | undefined | null): number {
+    const key = (regulation || DEFAULT_REGULATION) as Regulation;
+    return REGULATION_CREDITS[key] ?? REGULATION_CREDITS[DEFAULT_REGULATION];
+}
+
+/** Typical per-semester load for manual entry ≈ degree min ÷ 8 semesters */
+export function getStandardSemesterCredits(regulation: Regulation | string | undefined | null): number {
+    return Math.round(getRequiredCredits(regulation) / 8);
+}
+
 // Available regulations
-export const REGULATIONS: Regulation[] = ['R13', 'R15', 'R16', 'R18', 'R22', 'R24'];
+export const REGULATIONS: Regulation[] = ['R13', 'R15', 'R16', 'R18', 'R22', 'R24', 'R25'];
 
 // Semester labels
 export const SEMESTER_LABELS: Record<string, string> = {

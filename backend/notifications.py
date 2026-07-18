@@ -25,7 +25,7 @@ FALLBACK_NOTIFICATIONS: List[Dict[str, Any]] = [
         "date": "",
         "category": "general",
         "degree": ["B.Tech"],
-        "regulation": ["R18", "R22", "R24"],
+        "regulation": ["R18", "R22", "R24", "R25"],
         "url": FASTUPDATES_URL,
         "exam_year": "2026",
         "source": SOURCE_NAME,
@@ -50,7 +50,7 @@ def _html_unescape(text: str) -> str:
 
 def _infer_regulations(title: str) -> List[str]:
     found = re.findall(r"R\d{2}", title.upper())
-    return sorted(set(found)) or ["R18", "R22", "R24"]
+    return sorted(set(found)) or ["R18", "R22", "R24", "R25"]
 
 
 def _categorize(title: str) -> str:

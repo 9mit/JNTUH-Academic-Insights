@@ -80,7 +80,7 @@ export default function QuickConverter() {
                             Percentage = (CGPA - 0.5) × 10
                         </div>
                         <p className="text-xs text-text-muted leading-relaxed">
-                            This formula is as per JNTUH Academic Regulations for R16, R18, R22 and R24.
+                            This formula is as per JNTUH Academic Regulations for R16, R18, R22, R24 and R25.
                             Example: CGPA 8.5 → (8.5 - 0.5) × 10 = <b className="text-accent">80%</b>
                         </p>
                     </div>

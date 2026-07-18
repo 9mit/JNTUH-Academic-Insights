@@ -1,4 +1,5 @@
 import type { Regulation, Semester } from '../types';
+import { getStandardSemesterCredits } from '../constants/grading';
 import { getSemesterSGPA } from './calculations';
 
 interface HeuristicInsight {
@@ -163,12 +164,13 @@ export function getRequiredSGPAForTarget(
     semesters: Semester[],
     targetCGPA: number,
     remainingSemesters: number = 1,
-    creditsPerSemester: number = 20,
+    creditsPerSemester?: number,
     regulation?: Regulation,
 ): { required: number; achievable: boolean; message: string } | null {
     if (targetCGPA < 0 || targetCGPA > 10) return null;
     if (remainingSemesters < 1) return null;
 
+    const perSem = creditsPerSemester ?? getStandardSemesterCredits(regulation);
     const sgpaData = semesters.filter(sem => getSemesterSGPA(sem, regulation) > 0);
 
     if (sgpaData.length === 0) {
@@ -185,13 +187,15 @@ export function getRequiredSGPAForTarget(
 
     for (const sem of sgpaData) {
         const sgpa = getSemesterSGPA(sem, regulation);
-        const credits = sem.mode === 'manual' ? 20 : sem.subjects.reduce((sum, s) => sum + s.credits, 0);
+        const credits = sem.mode === 'manual'
+            ? getStandardSemesterCredits(regulation)
+            : sem.subjects.reduce((sum, s) => sum + s.credits, 0);
         currentSum += sgpa * credits;
         currentCredits += credits;
     }
 
     // Calculate required SGPA
-    const futureCredits = remainingSemesters * creditsPerSemester;
+    const futureCredits = remainingSemesters * perSem;
     const totalCredits = currentCredits + futureCredits;
     const requiredSum = targetCGPA * totalCredits;
     const neededSum = requiredSum - currentSum;

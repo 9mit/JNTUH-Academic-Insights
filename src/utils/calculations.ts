@@ -1,5 +1,5 @@
 import type { Subject, Semester, CalculationResult, CGPAResult, GradeDistribution, YearlyAverage, Regulation } from '../types';
-import { GRADE_POINTS, toPercentage, REGULATION_CREDITS } from '../constants/grading';
+import { GRADE_POINTS, toPercentage, getRequiredCredits, getStandardSemesterCredits } from '../constants/grading';
 import { getGradePointsForRegulation } from './regulationGrades';
 import { isNonCreditSubject } from './nonCreditSubjects';
 
@@ -138,7 +138,7 @@ export function getSemesterSGPA(semester: Semester, regulation?: Regulation): nu
  */
 export function getSemesterCredits(semester: Semester, regulation?: Regulation): number {
     if (semester.mode === 'manual') {
-        return 20; // Standard for manual mode
+        return getStandardSemesterCredits(regulation);
     }
     if (typeof semester.officialCredits === 'number' && semester.officialCredits > 0) {
         return semester.officialCredits;
@@ -175,20 +175,22 @@ export function calculateCGPA(semesters: Semester[], regulation?: Regulation): C
 }
 
 /**
- * Check if a student is graduated based on their performance
+ * Degree award check: earned credits ≥ regulation minimum, no F/Ab credit loss,
+ * and CGPA ≥ 5.0 (JNTUH award of degree rule across R16–R25).
  */
-export function isGraduated(semesters: Semester[], regulation: Regulation = 'R18'): boolean {
-    const { earned } = getCreditsStats(semesters, regulation);
-    const required = REGULATION_CREDITS[regulation] ?? 160;
-    
-    const allSemesters = semesters.length >= 8;
-    const backlogs = getBacklogs(semesters);
-    
-    // Direct credit match or clear pass of all 8 semesters
-    if (earned >= required) return true;
-    if (allSemesters && backlogs.length === 0 && earned >= required * 0.95) return true;
-    
-    return false;
+export function isGraduated(
+    semesters: Semester[],
+    regulation: Regulation = 'R18',
+    officialCgpa?: number | null,
+): boolean {
+    const { earned, lost } = getCreditsStats(semesters, regulation);
+    const required = getRequiredCredits(regulation);
+    const cgpa =
+        officialCgpa != null && officialCgpa > 0
+            ? officialCgpa
+            : calculateCGPA(semesters, regulation).cgpa;
+
+    return earned >= required && lost === 0 && cgpa >= 5.0;
 }
 
 /**
@@ -255,14 +257,15 @@ export function calculateRequiredSGPA(
     semesters: Semester[],
     targetCGPA: number,
     remainingSemesters: number,
-    creditsPerSemester: number = 20,
+    creditsPerSemester?: number,
     regulation?: Regulation,
 ): number | null {
+    const perSem = creditsPerSemester ?? getStandardSemesterCredits(regulation);
     const currentResult = calculateCGPA(semesters, regulation);
     const currentCredits = currentResult.totalCredits;
     const currentWeightedSum = currentResult.cgpa * currentCredits;
 
-    const futureCredits = remainingSemesters * creditsPerSemester;
+    const futureCredits = remainingSemesters * perSem;
     const totalCredits = currentCredits + futureCredits;
     const requiredWeightedSum = targetCGPA * totalCredits;
     const neededSum = requiredWeightedSum - currentWeightedSum;
@@ -291,7 +294,7 @@ export function getPerformanceCategory(cgpa: number): string {
 /**
  * Get credits statistics (earned and lost).
  * When API semesterCredits are present, earned = official registered − lost (F/Ab).
- * This matches JNTUH totals (e.g. R18 160) instead of inflated subject-row sums.
+ * Totals follow each regulation's official semester credits, not a fixed 160.
  */
 export function getCreditsStats(
     semesters: Semester[],
@@ -299,6 +302,7 @@ export function getCreditsStats(
 ): { earned: number; lost: number } {
     let earned = 0;
     let lost = 0;
+    const manualCredits = getStandardSemesterCredits(regulation);
 
     for (const semester of semesters) {
         if (semester.mode === 'detailed') {
@@ -310,7 +314,7 @@ export function getCreditsStats(
                 earned += result.earnedCredits;
             }
         } else if (semester.mode === 'manual' && (semester.manualSGPA ?? 0) > 0) {
-            earned += 20; // Assume standard credits for manual mode
+            earned += manualCredits;
         }
     }
 
@@ -323,11 +327,12 @@ export function getYearEarnedCredits(
     year: number,
     regulation?: Regulation
 ): number {
+    const manualCredits = getStandardSemesterCredits(regulation);
     return semesters
         .filter((s) => s.year === year)
         .reduce((sum, s) => {
             if (!hasSemesterData(s)) return sum;
-            if (s.mode === 'manual') return sum + ((s.manualSGPA ?? 0) > 0 ? 20 : 0);
+            if (s.mode === 'manual') return sum + ((s.manualSGPA ?? 0) > 0 ? manualCredits : 0);
             const result = calculateSGPA(s.subjects, regulation);
             if (typeof s.officialCredits === 'number' && s.officialCredits > 0) {
                 return sum + Math.max(0, s.officialCredits - result.lostCredits);

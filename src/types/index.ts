@@ -1,6 +1,6 @@
 // JNTUH Grading Types and Interfaces
 
-export type Regulation = 'R13' | 'R15' | 'R16' | 'R18' | 'R22' | 'R24';
+export type Regulation = 'R13' | 'R15' | 'R16' | 'R18' | 'R22' | 'R24' | 'R25';
 
 export type Grade = 'S' | 'O' | 'A+' | 'A' | 'B+' | 'B' | 'C' | 'D' | 'E' | 'F' | 'Ab';
 

@@ -4,6 +4,7 @@ import FilterSelect from './ui/FilterSelect';
 import SectionHeader from './ui/SectionHeader';
 import { useAcademic } from '../context/AcademicContext';
 import { parseHtno } from '../utils/htnoProfile';
+import { REGULATIONS } from '../constants/grading';
 import toast from 'react-hot-toast';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -288,7 +289,7 @@ export default function NotificationsHub() {
                             onChange={setRegulation}
                             options={[
                                 { value: '', label: 'All Regulations' },
-                                ...['R25', 'R24', 'R22', 'R18', 'R16', 'R13'].map(r => ({ value: r, label: r })),
+                                ...[...REGULATIONS].reverse().map(r => ({ value: r, label: r })),
                             ]}
                         />
                     </div>

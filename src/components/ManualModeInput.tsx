@@ -1,7 +1,7 @@
 import { useState, type ChangeEvent } from 'react';
 import type { Semester } from '../types';
 import { useAcademic } from '../context/AcademicContext';
-import { STANDARD_CREDITS, toPercentage } from '../constants/grading';
+import { getStandardSemesterCredits, toPercentage } from '../constants/grading';
 import { validateGPA } from '../utils/calculations';
 import { Info, Target, TrendingUp } from 'lucide-react';
 
@@ -10,7 +10,8 @@ interface ManualModeInputProps {
 }
 
 export default function ManualModeInput({ semester }: ManualModeInputProps) {
-    const { setManualSGPA } = useAcademic();
+    const { setManualSGPA, data } = useAcademic();
+    const manualCredits = getStandardSemesterCredits(data.regulation);
     const [inputValue, setInputValue] = useState<string>(
         semester.manualSGPA?.toString() || ''
     );
@@ -101,7 +102,7 @@ export default function ManualModeInput({ semester }: ManualModeInputProps) {
             <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl flex gap-3">
                 <Info className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
                 <p className="text-xs text-text-secondary leading-relaxed">
-                    <b className="text-primary">Manual Mode</b> uses a fixed weight of <b className="text-primary">{STANDARD_CREDITS} credits</b>.
+                    <b className="text-primary">Manual Mode</b> uses a fixed weight of <b className="text-primary">{manualCredits} credits</b> ({data.regulation}).
                     For precise university calculations that account for variable course credits, use <b className="text-accent underline cursor-pointer">Detailed Mode</b>.
                 </p>
             </div>

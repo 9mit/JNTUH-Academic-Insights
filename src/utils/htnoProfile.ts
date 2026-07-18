@@ -34,11 +34,13 @@ export function parseHtno(htno?: string): HtnoProfile | null {
 
   let regulationHint = 'R18';
   if (admissionYear) {
-    if (admissionYear >= 2024) regulationHint = 'R24';
+    if (admissionYear >= 2025) regulationHint = 'R25';
+    else if (admissionYear >= 2024) regulationHint = 'R24';
     else if (admissionYear >= 2022) regulationHint = 'R22';
     else if (admissionYear >= 2018) regulationHint = 'R18';
     else if (admissionYear >= 2016) regulationHint = 'R16';
-    else regulationHint = 'R15';
+    else if (admissionYear === 2015) regulationHint = 'R15';
+    else regulationHint = 'R13';
   }
 
   const current = new Date().getFullYear();

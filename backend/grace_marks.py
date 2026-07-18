@@ -30,7 +30,7 @@ def check_grace_eligibility(
                 "grade": subj.get("grade"),
             })
 
-    scheme_applies = regulation in ("R16", "R18", "R22", "R24") and len(backlogs) <= 2
+    scheme_applies = regulation in ("R16", "R18", "R22", "R24", "R25") and len(backlogs) <= 2
     can_clear = scheme_applies and len(eligible_subjects) == len(backlogs) and len(backlogs) > 0
 
     return {

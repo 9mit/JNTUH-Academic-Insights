@@ -13,6 +13,7 @@ logger = logging.getLogger("jntuh_api")
 # CONSTANTS & MAPPINGS
 # ==========================================
 GRADE_POINTS_BY_REGULATION: Dict[str, Dict[str, int]] = {
+    "R25": {"O": 10, "A+": 9, "A": 8, "B+": 7, "B": 6, "C": 5, "D": 4, "F": 0, "Ab": 0, "-": 0},
     "R24": {"O": 10, "A+": 9, "A": 8, "B+": 7, "B": 6, "C": 5, "D": 4, "F": 0, "Ab": 0, "-": 0},
     "R22": {"O": 10, "A+": 9, "A": 8, "B+": 7, "B": 6, "C": 5, "D": 4, "F": 0, "Ab": 0, "-": 0},
     "R18": {"O": 10, "A+": 9, "A": 8, "B+": 7, "B": 6, "C": 5, "D": 4, "F": 0, "Ab": 0, "-": 0},
@@ -25,6 +26,24 @@ VALID_GRADES_BY_REGULATION: Dict[str, list] = {
     reg: list(grades.keys()) for reg, grades in GRADE_POINTS_BY_REGULATION.items()
 }
 
+# Degree credit minimums (keep in sync with src/constants/grading.ts REGULATION_CREDITS)
+REGULATION_CREDITS: Dict[str, int] = {
+    "R13": 216,
+    "R15": 218,
+    "R16": 192,
+    "R18": 160,
+    "R22": 160,
+    "R24": 160,
+    "R25": 160,
+}
+
+DEFAULT_REGULATION = "R18"
+
+
+def get_required_credits(regulation: str | None = None) -> int:
+    key = (regulation or DEFAULT_REGULATION).upper()
+    return REGULATION_CREDITS.get(key, REGULATION_CREDITS[DEFAULT_REGULATION])
+
 
 def detect_regulation(htno: str) -> str:
     """Detect JNTUH regulation from hall ticket number prefix."""
@@ -32,6 +51,8 @@ def detect_regulation(htno: str) -> str:
         return "R18"
     try:
         year = int(htno[0] + htno[1])
+        if year >= 25:
+            return "R25"
         if year >= 24:
             return "R24"
         if year >= 22:

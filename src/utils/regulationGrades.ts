@@ -2,6 +2,7 @@ import type { Grade, Regulation } from '../types';
 
 /** Regulation-specific grade points — mirrors backend/shared.py GRADE_POINTS_BY_REGULATION */
 export const GRADE_POINTS_BY_REGULATION: Record<Regulation, Record<string, number>> = {
+    R25: { O: 10, 'A+': 9, A: 8, 'B+': 7, B: 6, C: 5, D: 4, F: 0, Ab: 0, '-': 0 },
     R24: { O: 10, 'A+': 9, A: 8, 'B+': 7, B: 6, C: 5, D: 4, F: 0, Ab: 0, '-': 0 },
     R22: { O: 10, 'A+': 9, A: 8, 'B+': 7, B: 6, C: 5, D: 4, F: 0, Ab: 0, '-': 0 },
     R18: { O: 10, 'A+': 9, A: 8, 'B+': 7, B: 6, C: 5, D: 4, F: 0, Ab: 0, '-': 0 },
@@ -19,6 +20,7 @@ export function detectRegulationFromHallTicket(htno: string): Regulation {
     if (!htno || htno.length < 2) return 'R18';
     try {
         const year = parseInt(htno.slice(0, 2), 10);
+        if (year >= 25) return 'R25';
         if (year >= 24) return 'R24';
         if (year >= 22) return 'R22';
         if (year >= 18) return 'R18';

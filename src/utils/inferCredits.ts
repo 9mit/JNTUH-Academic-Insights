@@ -18,6 +18,10 @@ const SYLLABUS_CREDITS: Partial<Record<Regulation, Record<string, number>>> = {
     MA101BS: 4, CH102BS: 4, CS103ES: 3, EN104HS: 2, ME105ES: 1.5, CS106ES: 1.5,
     CH107BS: 1.5, EN108HS: 1.5, MC109ES: 0,
   },
+  R25: {
+    MA101BS: 4, CH102BS: 4, CS103ES: 3, EN104HS: 2, ME105ES: 1.5, CS106ES: 1.5,
+    CH107BS: 1.5, EN108HS: 1.5, MC109ES: 0,
+  },
   R16: {
     MA101BS: 4, CS102ES: 4, ME103ES: 4, PH104BS: 4, CH105BS: 4,
   },
