@@ -28,7 +28,8 @@ __pycache__
 .env.*
 !.env.example
 
-JNTUH NOTES
+# Keep R18 Study Library notes in the image (tracked in git; used by /notes/catalog).
+# Exclude only the large untracked/alternate note trees.
 jntunotes-main
 JNTUH-CSE-BTech-Notes-R22-main
 uploads
