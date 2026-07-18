@@ -265,6 +265,24 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                     `Latest semester on record: ${latestLabel} (${filled}/8). Later semis appear when JNTUH/dhethi publish them.`,
                     { duration: 6000, icon: <Sparkles className="w-4 h-4 text-sky-400" /> }
                 );
+
+                const htYear = /^\d{2}/.test(htno || '') ? parseInt(htno.slice(0, 2), 10) : NaN;
+                const hasR22SeriesCodes = subjects.some((s) =>
+                    /^18\d/.test(String(s.subject_code || '').replace(/\s/g, '').toUpperCase())
+                );
+                // R18-era HT with incomplete upstream data — possible detention into R22
+                if (
+                    !Number.isNaN(htYear) &&
+                    htYear >= 18 &&
+                    htYear <= 21 &&
+                    !hasR22SeriesCodes &&
+                    (!seen.length || (seen.length === 1 && seen[0] === 'R18'))
+                ) {
+                    toast(
+                        'If you rejoined under R22 after detention, upload memo PDFs (or a new HT if issued) — those results are not in the upstream feed yet.',
+                        { duration: 8000, icon: <Sparkles className="w-4 h-4 text-amber-400" /> }
+                    );
+                }
             }
 
             if (fetchMeta) {

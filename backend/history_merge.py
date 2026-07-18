@@ -22,6 +22,22 @@ _MODERN_SIGNAL = frozenset({"O", "A+"})  # strong modern letters (D is ambiguous
 _OLD_FAMILY = frozenset({"R13", "R15", "R16"})
 _MODERN_FAMILY = frozenset({"R18", "R22", "R24", "R25"})
 
+# Leading curriculum series on dhethi numeric codes (151AG → 15, 18107 → 18).
+# Only map series we have verified live; do not guess aggressively.
+_CODE_SERIES_TO_REG: Dict[str, str] = {
+    "15": "R18",
+    "18": "R22",
+}
+_PHASE_RANK: Dict[str, int] = {
+    "R13": 0,
+    "R15": 0,
+    "R16": 0,
+    "R18": 1,
+    "R22": 2,
+    "R24": 3,
+    "R25": 4,
+}
+
 
 def _ht_year(htno: str) -> int:
     try:
@@ -34,14 +50,53 @@ def _norm_code(code: Any) -> str:
     return str(code or "").strip().upper().replace(" ", "")
 
 
+def _code_series(code: Any) -> Optional[str]:
+    """Leading 2-digit curriculum series from codes like 151AG / 18107."""
+    c = _norm_code(code)
+    if not c:
+        return None
+    if re.match(r"^\d{5}$", c) or re.match(r"^\d{3}[A-Z0-9]{2,}$", c):
+        return c[:2]
+    return None
+
+
+def _code_regulation(code: Any) -> Optional[str]:
+    series = _code_series(code)
+    if not series:
+        return None
+    return _CODE_SERIES_TO_REG.get(series)
+
+
 def _subject_scheme_hint(subj: Dict[str, Any]) -> Optional[str]:
-    """Strong grade-letter scheme only — never guess from subject codes (R18 uses numeric codes too)."""
+    """Strong grade-letter scheme only (R16 vs R18+ alphabet)."""
     g = str(subj.get("grade") or "").strip()
     if g in _OLD_SIGNAL:
         return "old"
     if g in _MODERN_SIGNAL:
         return "modern"
     return None
+
+
+def _career_phase_id(subj: Dict[str, Any]) -> Optional[str]:
+    """
+    Comparable career phase for detention remaps.
+    Prefer subject-code series (R18/R22); else grade-letter old→R16 / modern→R18.
+    """
+    code_reg = _code_regulation(subj.get("subject_code"))
+    if code_reg:
+        return code_reg
+    grade_hint = _subject_scheme_hint(subj)
+    if grade_hint == "old":
+        return "R16"
+    if grade_hint == "modern":
+        return "R18"
+    return None
+
+
+def _phase_rank(phase: Optional[str]) -> int:
+    if not phase:
+        return -1
+    return _PHASE_RANK.get(phase.upper(), 1)
 
 
 def _subject_key(subj: Dict[str, Any]) -> Tuple[int, int, str]:
@@ -111,8 +166,16 @@ def _majority_regulation(subjects: List[Dict[str, Any]], fallback: str) -> str:
     return Counter(regs).most_common(1)[0][0]
 
 
+def _majority_code_regulation(subjects: List[Dict[str, Any]]) -> Optional[str]:
+    regs = [_code_regulation(s.get("subject_code")) for s in subjects]
+    regs = [r for r in regs if r]
+    if not regs:
+        return None
+    return Counter(regs).most_common(1)[0][0]
+
+
 def _semester_scheme_vote(subjects: List[Dict[str, Any]]) -> Optional[str]:
-    """Return 'old' | 'modern' | None from grade letters + subject-code shape."""
+    """Return 'old' | 'modern' | None from grade letters."""
     old_n = 0
     modern_n = 0
     for s in subjects:
@@ -136,10 +199,9 @@ def _slot_order() -> List[Tuple[int, int]]:
 
 def expand_detention_restart(subjects: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    When a student restarts under a new regulation after detention, dhethi keeps
-    both careers under the same 1-1 / 1-2 keys. Peel the later (modern) exam wave
-    out of slots that also contain an earlier old-scheme wave, onto the next free
-    year-sem slots so the post-detention timeline is visible.
+    When a student restarts under a newer regulation after detention, dhethi may
+    keep both careers under the same 1-1 / 1-2 keys. Peel the later career phase
+    (R22 code series, or modern grade wave after R16) onto free year-sem slots.
     """
     if not subjects:
         return subjects
@@ -148,31 +210,53 @@ def expand_detention_restart(subjects: List[Dict[str, Any]]) -> List[Dict[str, A
     for subj in subjects:
         by_sem[(int(subj.get("year") or 0), int(subj.get("sem") or 0))].append(subj)
 
-    last_old: Optional[Tuple[int, int]] = None
-    mixed_keys: List[Tuple[int, int]] = []
-    for key in sorted(k for k in by_sem if k[0] > 0):
-        old_subs = [s for s in by_sem[key] if _subject_scheme_hint(s) == "old"]
-        modern_subs = [s for s in by_sem[key] if _subject_scheme_hint(s) == "modern"]
-        if old_subs:
-            last_old = key
-        if old_subs and modern_subs:
-            mixed_keys.append(key)
+    phases_present = {
+        p for p in (_career_phase_id(s) for s in subjects) if p
+    }
+    ranks = {_phase_rank(p) for p in phases_present}
+    if len(ranks) < 2:
+        return subjects
 
-    if not mixed_keys or last_old is None:
+    earlier_rank = min(ranks)
+    earlier_phases = {p for p in phases_present if _phase_rank(p) == earlier_rank}
+    later_phases = {p for p in phases_present if _phase_rank(p) > earlier_rank}
+    if not earlier_phases or not later_phases:
+        return subjects
+
+    last_earlier: Optional[Tuple[int, int]] = None
+    for key in sorted(k for k in by_sem if k[0] > 0):
+        if any(_career_phase_id(s) in earlier_phases for s in by_sem[key]):
+            last_earlier = key
+
+    if last_earlier is None:
         return subjects
 
     peel_ids: set[int] = set()
-    for key in mixed_keys:
-        rows = by_sem[key]
-        old_exam_max = max(
-            (int(s.get("exam_code_num") or 0) for s in rows if _subject_scheme_hint(s) == "old"),
-            default=0,
-        )
-        for idx, subj in enumerate(rows):
-            hint = _subject_scheme_hint(subj)
-            exam_n = int(subj.get("exam_code_num") or 0)
-            # Peel modern-letter rows, or any row from a later exam wave than old grades
-            if hint == "modern" or (old_exam_max and exam_n > old_exam_max):
+    for key, rows in by_sem.items():
+        if key[0] <= 0:
+            continue
+        earlier_rows = [s for s in rows if _career_phase_id(s) in earlier_phases]
+        later_rows = [s for s in rows if _career_phase_id(s) in later_phases]
+
+        if earlier_rows and later_rows:
+            earlier_exam_max = max(
+                (int(s.get("exam_code_num") or 0) for s in earlier_rows),
+                default=0,
+            )
+            for subj in rows:
+                pid = _career_phase_id(subj)
+                exam_n = int(subj.get("exam_code_num") or 0)
+                if pid in later_phases:
+                    peel_ids.add(id(subj))
+                elif (
+                    pid not in earlier_phases
+                    and earlier_exam_max
+                    and exam_n > earlier_exam_max
+                ):
+                    peel_ids.add(id(subj))
+        elif later_rows and key <= last_earlier:
+            # Later regulation restarted into year-sem keys already used by phase A
+            for subj in later_rows:
                 peel_ids.add(id(subj))
 
     if not peel_ids:
@@ -182,7 +266,11 @@ def expand_detention_restart(subjects: List[Dict[str, Any]]) -> List[Dict[str, A
     keep: List[Dict[str, Any]] = []
     for subj in subjects:
         if id(subj) in peel_ids:
-            peel.append(dict(subj))
+            row = dict(subj)
+            phase = _career_phase_id(subj)
+            if phase and not row.get("regulation"):
+                row["regulation"] = phase
+            peel.append(row)
         else:
             keep.append(subj)
 
@@ -195,7 +283,7 @@ def expand_detention_restart(subjects: List[Dict[str, Any]]) -> List[Dict[str, A
         for s in keep
         if int(s.get("year") or 0) > 0
     }
-    free = [slot for slot in _slot_order() if slot > last_old and slot not in occupied]
+    free = [slot for slot in _slot_order() if slot > last_earlier and slot not in occupied]
 
     ordered_keys = sorted(
         peel_groups.keys(),
@@ -218,14 +306,20 @@ def expand_detention_restart(subjects: List[Dict[str, Any]]) -> List[Dict[str, A
             row["career_phase"] = 2
             row["original_year"] = src_key[0]
             row["original_sem"] = src_key[1]
+            phase = _career_phase_id(subj)
+            if phase:
+                row["regulation"] = phase
             remapped.append(row)
 
     logger.info(
-        "[merge] detention restart remap: peeled=%s groups=%s free_used=%s last_old=%s",
+        "[merge] detention restart remap: peeled=%s groups=%s free_used=%s "
+        "last_earlier=%s earlier=%s later=%s",
         len(peel),
         len(ordered_keys),
         min(len(ordered_keys), len(free)),
-        last_old,
+        last_earlier,
+        sorted(earlier_phases),
+        sorted(later_phases),
     )
     return remapped
 
@@ -277,13 +371,13 @@ def annotate_same_ht_career(result: Dict[str, Any]) -> Dict[str, Any]:
 
     - Keep every (year, sem) that appears (no drops)
     - Consolidate duplicate semester rows
-    - Detect old→modern scheme shift from grade letters; stamp per subject/semester
+    - Detect R16→R18 via grade letters and R18→R22 via subject-code series
+    - Remap restarted careers that share year-sem keys
     - Top-level regulation = chronologically latest semester scheme (for degree min / UI)
     """
     htno = str(result.get("htno") or "")
     ht_reg = (result.get("regulation") or detect_regulation(htno)).upper()
     subjects = [dict(s) for s in (result.get("subjects") or [])]
-    # Peel restarted modern career out of shared 1-1.. slots before consolidating
     subjects = expand_detention_restart(subjects)
     semesters = consolidate_semester_rows(list(result.get("semesters") or []))
 
@@ -301,25 +395,44 @@ def annotate_same_ht_career(result: Dict[str, Any]) -> Dict[str, Any]:
     career_family = _scheme_family(ht_reg)
     seen_old = career_family == "old"
     sticky_modern = False
+    sticky_later_reg: Optional[str] = None
     regulations_seen: List[str] = []
+    seen_code_regs: List[str] = []
 
     for sem_row in semesters:
         key = (int(sem_row["year"]), int(sem_row["sem"]))
         subs = by_sem.get(key, [])
+
+        code_reg = _majority_code_regulation(subs)
         vote = _semester_scheme_vote(subs)
 
-        if vote == "old":
+        if code_reg:
+            sem_reg = code_reg
+            if code_reg not in seen_code_regs:
+                seen_code_regs.append(code_reg)
+            # Sticky later curriculum after an earlier code series (R18→R22)
+            if len(seen_code_regs) >= 2:
+                sticky_later_reg = seen_code_regs[-1]
+            if _scheme_family(code_reg) == "old":
+                seen_old = True
+                sticky_modern = False
+            else:
+                if seen_old:
+                    sticky_modern = True
+        elif vote == "old":
             seen_old = True
             sticky_modern = False
             sem_reg = _old_peer(ht_reg)
         elif vote == "modern":
             if seen_old or _scheme_family(ht_reg) == "old":
                 sticky_modern = True
-                sem_reg = _modern_peer(ht_reg)
+                sem_reg = sticky_later_reg or _modern_peer(ht_reg)
             else:
-                sem_reg = ht_reg
+                sem_reg = sticky_later_reg or ht_reg
         else:
-            if sticky_modern:
+            if sticky_later_reg:
+                sem_reg = sticky_later_reg
+            elif sticky_modern:
                 sem_reg = _modern_peer(ht_reg)
             else:
                 sem_reg = ht_reg
@@ -330,7 +443,10 @@ def annotate_same_ht_career(result: Dict[str, Any]) -> Dict[str, Any]:
 
         for subj in subs:
             grade = str(subj.get("grade") or "").strip()
-            if grade in _OLD_SIGNAL:
+            subj_code_reg = _code_regulation(subj.get("subject_code"))
+            if subj_code_reg:
+                subj_reg = subj_code_reg
+            elif grade in _OLD_SIGNAL:
                 subj_reg = _old_peer(ht_reg)
             elif sticky_modern and grade not in _OLD_SIGNAL:
                 subj_reg = sem_reg
@@ -348,14 +464,31 @@ def annotate_same_ht_career(result: Dict[str, Any]) -> Dict[str, Any]:
         by_sem[(int(subj.get("year") or 0), int(subj.get("sem") or 0))].append(subj)
     for sem_row in semesters:
         key = (int(sem_row["year"]), int(sem_row["sem"]))
-        sem_row["regulation"] = _majority_regulation(
-            by_sem.get(key, []), sem_row.get("regulation") or ht_reg
-        )
+        code_reg = _majority_code_regulation(by_sem.get(key, []))
+        if code_reg:
+            sem_row["regulation"] = code_reg
+        else:
+            sem_row["regulation"] = _majority_regulation(
+                by_sem.get(key, []), sem_row.get("regulation") or ht_reg
+            )
+
+    # Chronological regulations_seen from stamped semesters
+    regulations_seen = []
+    for s in semesters:
+        r = str(s.get("regulation") or "").upper()
+        if r and r not in regulations_seen:
+            regulations_seen.append(r)
 
     latest_reg = ht_reg
     if semesters:
-        latest_reg = semesters[-1].get("regulation") or ht_reg
-    if seen_old and any(_scheme_family(str(s.get("regulation"))) == "modern" for s in semesters):
+        latest_reg = str(semesters[-1].get("regulation") or ht_reg).upper()
+    # If career spans multiple code-series phases, prefer the highest-rank seen
+    # when the final semester stamp is still the earlier phase (edge case).
+    if len(regulations_seen) >= 2:
+        highest = max(regulations_seen, key=lambda r: (_phase_rank(r), r))
+        if _phase_rank(highest) > _phase_rank(latest_reg):
+            latest_reg = highest
+    elif seen_old and any(_scheme_family(str(s.get("regulation"))) == "modern" for s in semesters):
         for s in reversed(semesters):
             if _scheme_family(str(s.get("regulation"))) == "modern":
                 latest_reg = s["regulation"]
