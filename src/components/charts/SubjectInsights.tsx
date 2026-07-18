@@ -1,7 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useAcademic } from '../../context/AcademicContext';
-import { GRADE_POINTS } from '../../constants/grading';
-import { motion } from 'framer-motion';
+import { getGradePointsForRegulation } from '../../utils/regulationGrades';
 import { TrendingUp, AlertCircle, Star, Activity, Target, Zap, BarChart3 } from 'lucide-react';
 import type { Subject } from '../../types';
 import { getBestSubjects, getSemesterSGPA, getSemesterCredits } from '../../utils/calculations';
@@ -92,15 +91,15 @@ export default function SubjectInsights() {
             getBestSubjects(sem.subjects).forEach(sub => {
                 // Filter out 0-credit mandatory courses (Environmental Science, Constitution of India, etc.)
                 // These don't affect CGPA and shouldn't be displayed in performance analysis
-                if (sub.grade && sub.name && sub.name !== "Subject Name" && sub.credits > 0) {
+                if (sub.grade && sub.name && sub.name !== "Subject Name" && !sub.nonCredit && sub.credits > 0) {
                     allSubjects.push({ ...sub, semesterId: sem.id });
                 }
             });
         });
 
         const sorted = [...allSubjects].sort((a, b) => {
-            const gpA = GRADE_POINTS[a.grade] || 0;
-            const gpB = GRADE_POINTS[b.grade] || 0;
+            const gpA = getGradePointsForRegulation(a.grade, data.regulation);
+            const gpB = getGradePointsForRegulation(b.grade, data.regulation);
             return gpB - gpA;
         });
 
@@ -135,18 +134,27 @@ export default function SubjectInsights() {
             if (insights.all.length === 0) return;
             setLoadingStats(true);
             try {
-                const subjectsPayload = insights.all.map(s => ({
-                    grade: s.grade,
-                    grade_points: GRADE_POINTS[s.grade] || 0
-                }));
+                const subjectsPayload = insights.all.map(s => {
+                    const [yearStr, semStr] = s.semesterId.split('-');
+                    return {
+                        subject_code: s.code || s.name.slice(0, 20),
+                        subject_name: s.name,
+                        grade: s.grade,
+                        credits: s.credits,
+                        grade_points: getGradePointsForRegulation(s.grade, data.regulation),
+                        year: parseInt(yearStr, 10),
+                        sem: parseInt(semStr, 10),
+                        regulation: data.regulation,
+                    };
+                });
 
                 const semestersPayload = data.semesters
                     .filter(sem => sem.subjects.length > 0 || (sem.manualSGPA ?? 0) > 0)
                     .map(sem => ({
                         year: sem.year,
                         sem: sem.sem,
-                        sgpa: getSemesterSGPA(sem),
-                        credits: getSemesterCredits(sem),
+                        sgpa: getSemesterSGPA(sem, data.regulation),
+                        credits: getSemesterCredits(sem, data.regulation),
                     }));
 
                 const response = await fetch(`${API_BASE_URL}/analyze/advanced`, {
@@ -168,7 +176,7 @@ export default function SubjectInsights() {
 
         const timer = setTimeout(fetchStats, 500);
         return () => clearTimeout(timer);
-    }, [insights.all.length]);
+    }, [insights.all, data.regulation, data.semesters]);
 
     if (insights.all.length === 0) return null;
 
@@ -200,9 +208,7 @@ export default function SubjectInsights() {
                     ))}
                 </div>
             ) : advancedStats && (
-                <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
+                <div
                     className="grid grid-cols-3 gap-4 mb-2"
                 >
                     <div className="bg-bg-card border border-white/5 rounded-2xl p-4 flex flex-col items-center text-center">
@@ -226,14 +232,11 @@ export default function SubjectInsights() {
                         <p className="text-[10px] uppercase font-bold text-text-muted">Dominant Grade</p>
                         <p className="text-xl font-black text-white">{advancedStats.dominant_grade}</p>
                     </div>
-                </motion.div>
+                </div>
             )}
 
             {/* Scatter Plot Visualization */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
+            <div
                 className="bg-bg-card border border-white/5 rounded-3xl p-6"
             >
                 <div className="flex items-center justify-between mb-6">
@@ -314,13 +317,10 @@ export default function SubjectInsights() {
                         <p className="text-[10px] font-bold text-rose-300 uppercase">Backlogs</p>
                     </div>
                 </div>
-            </motion.div>
+            </div>
 
             {/* Top Strengths Table */}
-            <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 }}
+            <div
                 className="bg-gradient-to-br from-emerald-500/10 to-bg-card border border-emerald-500/20 rounded-3xl p-6 relative overflow-hidden"
             >
                 <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
@@ -365,14 +365,11 @@ export default function SubjectInsights() {
                 ) : (
                     <p className="text-sm text-text-muted italic py-4 text-center">No O or A+ grades yet. Keep pushing!</p>
                 )}
-            </motion.div>
+            </div>
 
             {/* Focus Areas (B, C, D, E grades only — areas to improve, NOT failures) */}
             {insights.focusAreas.length > 0 && (
-                <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.4 }}
+                <div
                     className="bg-gradient-to-br from-amber-500/10 to-bg-card border border-amber-500/20 rounded-3xl p-6 relative overflow-hidden"
                 >
                     <div className="flex items-center gap-3 mb-6">
@@ -409,15 +406,12 @@ export default function SubjectInsights() {
                             </tbody>
                         </table>
                     </div>
-                </motion.div>
+                </div>
             )}
 
             {/* Failed Subjects (F/Ab grades — shown separately, only if they exist) */}
             {insights.failed.length > 0 && (
-                <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.5 }}
+                <div
                     className="bg-gradient-to-br from-rose-500/10 to-bg-card border border-rose-500/20 rounded-3xl p-6 relative overflow-hidden"
                 >
                     <div className="flex items-center gap-3 mb-6">
@@ -460,7 +454,7 @@ export default function SubjectInsights() {
                             ⚠️ These {insights.failed.length} subject(s) need to be cleared to complete your degree.
                         </p>
                     </div>
-                </motion.div>
+                </div>
             )}
         </div>
     );

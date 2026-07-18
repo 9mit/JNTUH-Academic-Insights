@@ -41,7 +41,7 @@ export const STANDARD_CREDITS = 20;
 export const REGULATION_CREDITS: Record<Regulation, number> = {
     'R13': 216,  // 224 registered, 216 required for degree
     'R15': 200,  // Transition regulation
-    'R16': 192,  // Official R16 regulation (192 total credits)
+    'R16': 180,  // First CBCS regulation (original)
     'R18': 160,  // AICTE model curriculum
     'R22': 160,  // Latest regulation
     'R24': 160,  // Follows R22 pattern

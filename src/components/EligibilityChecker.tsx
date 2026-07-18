@@ -133,8 +133,8 @@ export default function EligibilityChecker() {
             {/* Result Display */}
             {eligibilityResult && (
                 <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={false}
+                    animate={{ opacity: 1 }}
                     className={`mt-4 p-5 rounded-2xl border-2 ${eligibilityResult.noCutoff
                         ? 'bg-emerald-500/10 border-emerald-500/30'
                         : eligibilityResult.isEligible

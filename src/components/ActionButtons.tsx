@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { useAcademic } from '../context/AcademicContext';
 import { exportToExcel, generateShareableUrl, copyToClipboard } from '../utils/exportUtils';
-import { Download, Check, Link } from 'lucide-react';
+import { downloadCgpaCard, renderCgpaCard, shareCgpaCard } from '../utils/cgpaCard';
+import { Download, Check, Link, Image as ImageIcon, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function ActionButtons() {
-    const { data } = useAcademic();
+    const { data, getCGPA } = useAcademic();
+    const { cgpa, percentage } = getCGPA();
     const [copied, setCopied] = useState(false);
+    const [cardBusy, setCardBusy] = useState(false);
 
     const handleExport = () => {
         try {
@@ -24,7 +27,7 @@ export default function ActionButtons() {
 
     const handleShare = async () => {
         try {
-            const url = generateShareableUrl({
+            const url = await generateShareableUrl({
                 semesters: data.semesters,
                 studentName: data.studentName,
                 hallTicket: data.hallTicket,
@@ -41,9 +44,35 @@ export default function ActionButtons() {
         }
     };
 
+    const handleCgpaCard = async () => {
+        if (cgpa <= 0) {
+            toast.error('Import results before sharing a CGPA card');
+            return;
+        }
+        setCardBusy(true);
+        try {
+            const blob = await renderCgpaCard({
+                data,
+                cgpa,
+                percentage,
+                includeName: true,
+            });
+            const shared = await shareCgpaCard(blob, 'JNTUH CGPA Card');
+            if (!shared) {
+                await downloadCgpaCard(blob);
+                toast.success('CGPA card downloaded — share it on WhatsApp');
+            } else {
+                toast.success('Shared!');
+            }
+        } catch {
+            toast.error('Could not create CGPA card');
+        } finally {
+            setCardBusy(false);
+        }
+    };
+
     return (
-        <div className="flex items-center gap-3">
-            {/* Export Button */}
+        <div className="flex flex-wrap items-center gap-3">
             <button
                 onClick={handleExport}
                 className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-xl text-emerald-400 font-medium text-sm transition-all"
@@ -52,7 +81,6 @@ export default function ActionButtons() {
                 Export Excel
             </button>
 
-            {/* Share Button */}
             <button
                 onClick={handleShare}
                 className={`flex items-center gap-2 px-4 py-2.5 border rounded-xl font-medium text-sm transition-all ${copied
@@ -71,6 +99,15 @@ export default function ActionButtons() {
                         Share Link
                     </>
                 )}
+            </button>
+
+            <button
+                onClick={handleCgpaCard}
+                disabled={cardBusy}
+                className="flex items-center gap-2 px-4 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl text-amber-300 font-medium text-sm transition-all disabled:opacity-50"
+            >
+                {cardBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+                CGPA Card
             </button>
         </div>
     );

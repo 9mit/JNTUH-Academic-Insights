@@ -13,6 +13,4 @@ python-multipart>=0.0.9
 
 # Auto-fetch feature dependencies
 requests>=2.31.0
-
-# Server utilities
-sse-starlette>=1.6.0
+python-dotenv>=1.0.0

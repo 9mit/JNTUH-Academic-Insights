@@ -1,256 +1,195 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
 import { AcademicProvider, useAcademic } from './context/AcademicContext';
 import InputView from './components/InputView';
 import Dashboard from './components/Dashboard';
-import Predictions from './components/Predictions';
-import PrintableTranscript from './components/PrintableTranscript';
 import HelpGuide from './components/HelpGuide';
+import Predictions from './components/Predictions';
 import NotesHub from './components/NotesHub';
+import NotificationsHub from './components/NotificationsHub';
+import BacklogPlanner from './components/BacklogPlanner';
+import GraceMarksChecker from './components/GraceMarksChecker';
+import TabErrorBoundary from './components/TabErrorBoundary';
 import type { TabType, Regulation } from './types';
-import { decodeShareableData } from './utils/exportUtils';
-import { motion } from 'framer-motion';
-import {
-  LayoutDashboard,
-  GraduationCap,
-  FileText,
-  HelpCircle,
-  PenLine,
-  Zap,
-  ChevronRight,
-  Brain,
-  BookOpen,
-  Menu,
-  X
-} from 'lucide-react';
-
+import { decodeShareableData, decodeShareToken } from './utils/exportUtils';
 import PageTransition from './components/motion/PageTransition';
+import AppShell from './components/layout/AppShell';
+import PrintableTranscript from './components/PrintableTranscript';
+import CreditProgressDashboard from './components/CreditProgressDashboard';
+import VaultUnlockBanner from './components/VaultUnlockBanner';
 
-const NAV_ITEMS: { id: TabType; label: string; icon: React.ElementType }[] = [
-  { id: 'input', label: 'Add Grades', icon: PenLine },
-  { id: 'dashboard', label: 'Your Progress', icon: LayoutDashboard },
-  { id: 'predictions', label: 'Goal Planner', icon: Brain },
-  { id: 'transcript', label: 'Academic Report', icon: FileText },
-  { id: 'notes', label: 'Study Library', icon: BookOpen },
-  { id: 'help', label: 'Help Guide', icon: HelpCircle },
-];
+const TAB_LABELS: Record<TabType, string> = {
+  input: 'Import Results',
+  dashboard: 'Progress',
+  predictions: 'Goal Planner',
+  transcript: 'Report',
+  notes: 'Study Library',
+  credits: 'Credits',
+  notifications: 'Updates',
+  backlog: 'Backlog Plan',
+  help: 'Help',
+};
+
+const HASH_TO_TAB: Record<string, TabType> = {
+  import: 'input',
+  input: 'input',
+  progress: 'dashboard',
+  dashboard: 'dashboard',
+  credits: 'credits',
+  backlog: 'backlog',
+  report: 'transcript',
+  transcript: 'transcript',
+  goals: 'predictions',
+  predictions: 'predictions',
+  notes: 'notes',
+  library: 'notes',
+  updates: 'notifications',
+  notifications: 'notifications',
+  help: 'help',
+};
+
+const TAB_TO_HASH: Record<TabType, string> = {
+  input: 'import',
+  dashboard: 'progress',
+  credits: 'credits',
+  backlog: 'backlog',
+  transcript: 'report',
+  predictions: 'goals',
+  notes: 'notes',
+  notifications: 'updates',
+  help: 'help',
+};
+
+function tabFromHash(): TabType {
+  const raw = window.location.hash.replace(/^#\/?/, '').split('?')[0].toLowerCase();
+  return HASH_TO_TAB[raw] || 'input';
+}
 
 function AppContent() {
-  const [activeTab, setActiveTab] = useState<TabType>('input');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { getCGPA, importSemesters, setStudentInfo, setRegulation } = useAcademic();
+  const [activeTab, setActiveTabState] = useState<TabType>(() =>
+    typeof window !== 'undefined' ? tabFromHash() : 'input'
+  );
+  const { getCGPA, importSemesters, setStudentInfo, setRegulation, data } = useAcademic();
   const { cgpa, percentage } = getCGPA();
 
-  // Parse shared URL on mount
+  const setActiveTab = useCallback((tab: TabType) => {
+    setActiveTabState(tab);
+    const hash = TAB_TO_HASH[tab] || 'import';
+    const next = `#/${hash}`;
+    if (window.location.hash !== next) {
+      window.history.replaceState({}, '', `${window.location.pathname}${window.location.search}${next}`);
+    }
+  }, []);
+
+  useEffect(() => {
+    const onHash = () => setActiveTabState(tabFromHash());
+    window.addEventListener('hashchange', onHash);
+    if (!window.location.hash) {
+      window.history.replaceState({}, '', `${window.location.pathname}${window.location.search}#/import`);
+    }
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const shareData = params.get('share');
-    if (shareData) {
+    const token = params.get('token');
+
+    const loadShared = async () => {
       try {
-        const decoded = decodeShareableData(shareData);
+        let decoded = null;
+        if (token) decoded = await decodeShareToken(token);
+        else if (shareData) decoded = decodeShareableData(shareData);
+
         if (decoded && decoded.semesters.length > 0) {
           importSemesters(decoded.semesters);
           if (decoded.studentName || decoded.hallTicket) {
             setStudentInfo(decoded.studentName, decoded.hallTicket);
           }
-          if (decoded.regulation) {
-            setRegulation(decoded.regulation as Regulation);
-          }
+          if (decoded.regulation) setRegulation(decoded.regulation as Regulation);
           setActiveTab('dashboard');
           toast.success('Shared results loaded successfully!');
-          // Clean URL
-          window.history.replaceState({}, '', window.location.pathname);
+          window.history.replaceState({}, '', `${window.location.pathname}#/progress`);
         }
       } catch {
         toast.error('Invalid share link');
       }
-    }
+    };
+    if (shareData || token) loadShared();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Dynamic document title based on active tab
-  useEffect(() => {
-    const currentTab = NAV_ITEMS.find(i => i.id === activeTab);
-    document.title = currentTab
-      ? `${currentTab.label} — JNTUH Academic Insights`
-      : 'JNTUH Academic Insights';
-  }, [activeTab]);
+  const renderTab = () => {
+    switch (activeTab) {
+      case 'input':
+        return <InputView onImportSuccess={() => setActiveTab('dashboard')} />;
+      case 'dashboard':
+        return <Dashboard />;
+      case 'predictions':
+        return <Predictions />;
+      case 'transcript':
+        return <PrintableTranscript />;
+      case 'notes':
+        return <NotesHub />;
+      case 'credits':
+        return <CreditProgressDashboard />;
+      case 'notifications':
+        return <NotificationsHub />;
+      case 'backlog':
+        return (
+          <div className="space-y-8">
+            <BacklogPlanner onOpenStudyLibrary={() => setActiveTab('notes')} />
+            <GraceMarksChecker />
+          </div>
+        );
+      case 'help':
+        return <HelpGuide />;
+      default:
+        return <InputView />;
+    }
+  };
 
   return (
-    <>
-      <div className="min-h-screen flex bg-black relative overflow-x-hidden">
-        {/* Backdrop for Mobile Drawer */}
-        {isMobileMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="fixed inset-0 bg-black/70 backdrop-blur-md z-45 lg:hidden no-print"
-            onClick={() => setIsMobileMenuOpen(false)}
-          />
-        )}
-
-        <aside className={`w-72 bg-floating-sidebar border border-white/5 rounded-[32px] lg:m-6 m-0 lg:h-[calc(100vh-3rem)] h-screen flex flex-col fixed no-print z-50 transform 
-            ${isMobileMenuOpen ? 'translate-x-0 top-0 left-0 lg:m-6 m-0' : '-translate-x-full top-0 left-0 lg:m-6 m-0'} 
-            lg:translate-x-0 transition-all duration-500 ease-out`}>
-          {/* Logo */}
-          <div className="p-8 border-b border-white/5 relative overflow-hidden group">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-50" />
-            <div className="flex items-center justify-between gap-4 relative z-10">
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <div className="absolute inset-0 bg-primary rounded-2xl blur-xl opacity-40 animate-pulse" />
-                  <div className="relative w-12 h-12 bg-gradient-to-br from-gray-900 to-black rounded-2xl flex items-center justify-center border border-white/10 shadow-2xl group-hover:border-primary/50 transition-colors duration-500">
-                    <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                    <GraduationCap className="w-6 h-6 text-white relative z-10 drop-shadow-[0_0_10px_rgba(56,189,248,0.5)]" />
-                  </div>
-                </div>
-                <div>
-                  <h1 className="text-lg font-black text-white tracking-tight drop-shadow-md">JNTUH</h1>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <p className="text-[9px] font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-cyan-300 uppercase tracking-[0.2em]">Insights</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Close Button for Mobile Drawer */}
-              <button
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="lg:hidden p-1.5 hover:bg-white/10 rounded-xl transition-colors border border-white/10 text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 p-6 space-y-2 overflow-y-auto custom-scrollbar">
-            <p className="text-[10px] font-bold text-text-muted uppercase tracking-[0.2em] mb-4 px-4 flex items-center gap-2">
-              <span className="text-primary">◆</span> Navigation
-            </p>
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <div key={item.id} className="relative group">
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeTab"
-                      className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent border-l-2 border-primary rounded-r-xl"
-                      initial={false}
-                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                    />
-                  )}
-                  <button
-                    onClick={() => {
-                      setActiveTab(item.id);
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-left relative z-10 transition-all duration-300
-                        ${isActive
-                        ? 'text-white'
-                        : 'text-text-muted hover:text-white hover:translate-x-1'
-                      }`}
-                  >
-                    <Icon className={`w-5 h-5 transition-colors duration-300 ${isActive ? 'text-primary drop-shadow-[0_0_8px_rgba(56,189,248,0.5)]' : 'group-hover:text-white'}`} />
-                    <span className={`font-semibold text-sm tracking-wide ${isActive ? 'text-shadow-sm' : ''}`}>{item.label}</span>
-                    {isActive && (
-                      <motion.div
-                        initial={{ scale: 0, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        className="ml-auto"
-                      >
-                        <ChevronRight className="w-4 h-4 text-primary" />
-                      </motion.div>
-                    )}
-                  </button>
-                </div>
-              );
-            })}
-          </nav>
-
-          {/* Stats Preview */}
-          <div className="p-6 border-t border-white/5">
-            <p className="text-[10px] font-bold text-text-muted uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-              <span className="text-emerald-400">◈</span> Quick Stats
-            </p>
-            <div className="relative overflow-hidden bg-gradient-to-b from-gray-900 to-black rounded-2xl p-5 border border-white/10 group hover:border-primary/30 transition-colors duration-500">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
-              {/* Shimmer Effect */}
-              <div className="absolute inset-0 -translate-x-[150%] group-hover:translate-x-[150%] transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/5 to-transparent z-0" />
-
-              <div className="flex items-center gap-2 mb-4 relative z-10">
-                <div className="p-1 rounded bg-primary/10">
-                  <Zap className="w-3.5 h-3.5 text-primary" />
-                </div>
-                <span className="text-[10px] font-extrabold text-primary uppercase tracking-widest">Quick Stats</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 relative z-10 border-t border-white/5 pt-4">
-                <div>
-                  <p className="text-2xl font-black text-white group-hover:text-primary transition-colors duration-300">{cgpa > 0 ? cgpa.toFixed(2) : '—'}</p>
-                  <p className="text-[9px] text-text-muted font-bold uppercase tracking-wider mt-1">CGPA</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-black text-white group-hover:text-emerald-400 transition-colors duration-300">{percentage > 0 ? percentage.toFixed(1) : '—'}%</p>
-                  <p className="text-[9px] text-text-muted font-bold uppercase tracking-wider mt-1">Score</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 lg:ml-[21rem] ml-0 relative min-h-screen">
-          {/* Top Bar - Grand Centered Design */}
-          <header className="sticky top-0 z-40 bg-[#060b16]/85 border-b border-white/5 no-print backdrop-blur-md">
-            <div className="px-6 lg:px-10 py-6 flex items-center justify-between lg:justify-center relative">
-              {/* Hamburger Button for Mobile */}
-              <button
-                onClick={() => setIsMobileMenuOpen(true)}
-                className="lg:hidden p-2 hover:bg-white/5 border border-white/10 rounded-xl text-text-muted hover:text-white transition-all absolute left-6"
-              >
-                <Menu className="w-5 h-5 text-white" />
-              </button>
-
-              <div className="text-center w-full">
-                <h2 className="text-xl lg:text-3xl font-black text-white tracking-tight bg-gradient-to-r from-white via-primary to-white bg-clip-text">
-                  {NAV_ITEMS.find(i => i.id === activeTab)?.label}
-                </h2>
-                <p className="text-xs text-text-muted mt-1 max-w-md mx-auto hidden sm:block">
-                  {activeTab === 'dashboard' && 'View your grade journey & statistics'}
-                  {activeTab === 'input' && 'Add or import your semester results'}
-                  {activeTab === 'predictions' && 'Plan future semester goals & targets'}
-                  {activeTab === 'transcript' && 'View and export your mark lists'}
-                  {activeTab === 'notes' && 'Find study materials & resources'}
-                  {activeTab === 'help' && 'Frequently asked questions & usage guide'}
-                </p>
-              </div>
-            </div>
-          </header>
-
-          {/* Page Content */}
-          <div className="p-6 lg:p-10">
-            <PageTransition id={activeTab} mode="wait">
-              {activeTab === 'input' && <InputView />}
-              {activeTab === 'dashboard' && <Dashboard />}
-              {activeTab === 'predictions' && <Predictions />}
-              {activeTab === 'transcript' && <PrintableTranscript />}
-              {activeTab === 'notes' && <NotesHub />}
-              {activeTab === 'help' && <HelpGuide />}
-            </PageTransition>
-          </div>
-        </main>
-      </div>
-    </>
+    <AppShell
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      cgpa={cgpa}
+      percentage={percentage}
+      studentName={data.studentName}
+      hallTicket={data.hallTicket}
+    >
+      <PageTransition id={activeTab}>
+        <TabErrorBoundary tabLabel={TAB_LABELS[activeTab] ?? 'Page'}>
+          <VaultUnlockBanner />
+          {renderTab()}
+        </TabErrorBoundary>
+      </PageTransition>
+    </AppShell>
   );
 }
+
+const toastStyle = {
+  background: 'rgba(0, 0, 0, 0.92)',
+  color: '#fafafa',
+  border: '1px solid rgba(255,255,255,0.08)',
+  backdropFilter: 'blur(16px)',
+  borderRadius: '12px',
+  fontSize: '0.8125rem',
+  fontWeight: 550,
+  fontFamily: 'Outfit, sans-serif',
+};
 
 export default function App() {
   return (
     <AcademicProvider>
-      <Toaster position="top-right" />
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: toastStyle,
+          success: { iconTheme: { primary: '#22c55e', secondary: '#000000' } },
+          error: { iconTheme: { primary: '#c41e3a', secondary: '#000000' } },
+        }}
+      />
       <AppContent />
     </AcademicProvider>
   );

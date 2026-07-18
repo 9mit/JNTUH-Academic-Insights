@@ -8,6 +8,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from backend.non_credit import normalize_non_credit_subject
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -272,27 +274,32 @@ class AcademicProcessor:
         if credits is None or inferred_credits == 0.0:
             credits = inferred_credits
 
+        normalized = normalize_non_credit_subject(
+            internal_int, external_int, total_int, credits if credits is not None else 0.0
+        )
+
         subject_data = {
             'year': current_year,
             'sem': current_sem,
             'subject_code': code,
             'subject_name': name,
             'grade': grade,
-            'credits': credits,
+            'credits': normalized['credits'],
             'grade_points': get_grade_points_fn(grade, regulation),
-            'regulation': regulation
+            'regulation': regulation,
+            'non_credit': bool(normalized.get('non_credit')),
         }
 
         official_sem_sgpa = self.official_sgpas.get((current_year, current_sem))
         if official_sem_sgpa is not None:
             subject_data['official_sem_sgpa'] = official_sem_sgpa
 
-        if internal_int is not None:
-            subject_data['internal'] = internal_int
-        if external_int is not None:
-            subject_data['external'] = external_int
-        if total_int is not None:
-            subject_data['total'] = total_int
+        if 'internal' in normalized:
+            subject_data['internal'] = int(normalized['internal']) if normalized['internal'] == int(normalized['internal']) else normalized['internal']
+        if 'external' in normalized:
+            subject_data['external'] = int(normalized['external']) if normalized['external'] == int(normalized['external']) else normalized['external']
+        if 'total' in normalized:
+            subject_data['total'] = int(normalized['total']) if normalized['total'] == int(normalized['total']) else normalized['total']
 
         return subject_data
 

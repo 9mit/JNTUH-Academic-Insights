@@ -77,8 +77,13 @@ export async function fetchByHallTicket(htno: string) {
         throw new Error('Hall ticket number contains invalid characters');
     }
     
-    if (cleanHtno.length < 10 || cleanHtno.length > 12) {
-        throw new Error('Hall ticket number must be 10-12 alphanumeric characters');
+    if (cleanHtno.length !== 10) {
+        throw new Error('Hall ticket number must be exactly 10 alphanumeric characters');
+    }
+
+    // Align with backend: YY + 8 alphanumeric (e.g. 20B91A0501)
+    if (!/^[0-9]{2}[A-Z0-9]{8}$/.test(cleanHtno)) {
+        throw new Error('Hall ticket must start with two digits followed by 8 alphanumeric characters');
     }
 
     try {

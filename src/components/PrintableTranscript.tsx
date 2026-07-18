@@ -1,6 +1,7 @@
 import { useAcademic } from '../context/AcademicContext';
 import { getSemesterSGPA, hasSemesterData } from '../utils/calculations';
-import { Printer } from 'lucide-react';
+import { Printer, FileText } from 'lucide-react';
+import SectionHeader from './ui/SectionHeader';
 
 export default function PrintableTranscript() {
     const { data, getCGPA } = useAcademic();
@@ -23,17 +24,21 @@ export default function PrintableTranscript() {
     }
 
     return (
-        <div className="space-y-6">
-            {/* Action Buttons */}
-            <div className="flex justify-end gap-3 no-print">
-                <button onClick={handlePrint} className="btn-primary flex items-center gap-2">
-                    <Printer className="w-4 h-4" />
-                    Print Transcript
-                </button>
-            </div>
+        <div className="space-y-6 transcript-page">
+            <SectionHeader
+                icon={FileText}
+                title="Academic report"
+                subtitle={[data.studentName, data.hallTicket, data.regulation].filter(Boolean).join(' · ') || 'Printable semester-wise transcript'}
+                action={
+                    <button onClick={handlePrint} className="btn-primary flex items-center gap-2 no-print">
+                        <Printer className="w-4 h-4" />
+                        Print
+                    </button>
+                }
+            />
 
             {/* Printable Content - Clean White Theme for Print */}
-            <div className="bg-white text-black p-8 rounded-2xl shadow-lg print:shadow-none print:p-4">
+            <div className="transcript-print bg-white text-black p-8 rounded-2xl shadow-lg print:shadow-none print:p-4" style={{ backgroundColor: '#ffffff', color: '#000000' }}>
                 {/* Header */}
                 <div className="text-center mb-6 pb-4 border-b-2 border-gray-300 flex items-center justify-center gap-6">
                     <img 
@@ -81,7 +86,7 @@ export default function PrintableTranscript() {
 
                 {/* Semester-wise Results Tables */}
                 {semestersWithData.map((semester) => {
-                    const sgpa = getSemesterSGPA(semester);
+                    const sgpa = getSemesterSGPA(semester, data.regulation);
 
                     return (
                         <div key={semester.id} className="mb-8">
@@ -127,6 +132,11 @@ export default function PrintableTranscript() {
                                                 </td>
                                                 <td className="border border-gray-400 py-2 px-3 text-center text-gray-800">
                                                     {subject.name || 'Unnamed Subject'}
+                                                    {subject.nonCredit && (
+                                                        <span className="ml-2 inline-block text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                                                            Non-Credit
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="border border-gray-400 py-2 px-3 text-center text-gray-700">
                                                     {subject.internal ?? '—'}

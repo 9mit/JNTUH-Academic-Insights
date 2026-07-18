@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useAcademic } from '../context/AcademicContext';
 import { calculateCGPA } from '../utils/calculations';
-import { GRADES, GRADE_POINTS, getSemesterLabel } from '../constants/grading';
+import { getSemesterLabel } from '../constants/grading';
+import { getValidGradesForRegulation, getGradePointsForRegulation } from '../utils/regulationGrades';
 import type { Grade, Semester } from '../types';
 import { FlaskConical, TrendingUp, TrendingDown, Minus, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,6 +11,10 @@ export default function WhatIfCalculator() {
     const { data } = useAcademic();
     const [selectedSemId, setSelectedSemId] = useState<string>('');
     const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
+    const validGrades = useMemo(
+        () => getValidGradesForRegulation(data.regulation).filter(g => g !== '-' && g !== 'Ab') as Grade[],
+        [data.regulation],
+    );
     const [simulatedGrade, setSimulatedGrade] = useState<Grade>('O');
 
     // Get semesters with detailed subjects
@@ -25,15 +30,28 @@ export default function WhatIfCalculator() {
     // Find selected subject
     const selectedSubject = subjects.find(s => s.id === selectedSubjectId);
 
-    // Calculate current CGPA
-    const currentCGPA = calculateCGPA(data.semesters).cgpa;
+    // Calculate current CGPA (recalculated path — strip official locks for fair comparison)
+    const unlockedSemesters = useMemo(() =>
+        data.semesters.map(sem => ({
+            ...sem,
+            subjects: sem.subjects.map(sub => {
+                const next = { ...sub };
+                delete next.official_sem_sgpa;
+                return next;
+            }),
+        })),
+        [data.semesters],
+    );
+    const currentCGPA = calculateCGPA(unlockedSemesters, data.regulation).cgpa;
 
-    // Calculate simulated CGPA
     const simulatedResult = useMemo(() => {
-        if (!selectedSubject || !selectedSemester) return null;
+        if (!selectedSemId || !selectedSubjectId) return null;
 
-        // Clone semesters and modify the selected subject's grade
-        const modifiedSemesters: Semester[] = data.semesters.map(sem => {
+        const currentSem = unlockedSemesters.find(s => s.id === selectedSemId);
+        const currentSub = currentSem?.subjects.find(s => s.id === selectedSubjectId);
+        if (!currentSem || !currentSub) return null;
+
+        const modifiedSemesters: Semester[] = unlockedSemesters.map(sem => {
             if (sem.id !== selectedSemId) return sem;
 
             return {
@@ -45,7 +63,7 @@ export default function WhatIfCalculator() {
             };
         });
 
-        const newResult = calculateCGPA(modifiedSemesters);
+        const newResult = calculateCGPA(modifiedSemesters, data.regulation);
         const diff = newResult.cgpa - currentCGPA;
 
         return {
@@ -53,7 +71,7 @@ export default function WhatIfCalculator() {
             diff,
             trend: diff > 0.01 ? 'up' : diff < -0.01 ? 'down' : 'same',
         };
-    }, [selectedSubject, selectedSemester, simulatedGrade, data.semesters, currentCGPA, selectedSemId, selectedSubjectId]);
+    }, [simulatedGrade, unlockedSemesters, currentCGPA, selectedSemId, selectedSubjectId, data.regulation]);
 
     // Reset subject when semester changes
     const handleSemesterChange = (semId: string) => {
@@ -136,9 +154,9 @@ export default function WhatIfCalculator() {
                         className="input-field w-full"
                         disabled={!selectedSubjectId}
                     >
-                        {GRADES.filter(g => g !== 'Ab').map(grade => (
+                        {validGrades.map(grade => (
                             <option key={grade} value={grade}>
-                                {grade} ({GRADE_POINTS[grade]} points)
+                                {grade} ({getGradePointsForRegulation(grade, data.regulation)} points)
                             </option>
                         ))}
                     </select>
@@ -150,9 +168,9 @@ export default function WhatIfCalculator() {
                 {simulatedResult && selectedSubject && (
                     <motion.div
                         key="result"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
+                        initial={false}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 1 }}
                         className="bg-black/30 rounded-2xl p-5 border border-white/5"
                     >
                         <div className="flex items-center justify-between mb-4">

@@ -13,6 +13,8 @@ export interface Subject {
     internal?: number;
     external?: number;
     total?: number;
+    /** Audit / mandatory non-credit course (excluded from GPA & credit stats) */
+    nonCredit?: boolean;
     official_sem_sgpa?: number; // Official SGPA from memo
 }
 
@@ -24,6 +26,8 @@ export interface Semester {
     subjects: Subject[];
     manualSGPA: number | null;
     isExpanded: boolean;
+    /** Official semester credits from JNTUH API (semesterCredits), when available */
+    officialCredits?: number;
 }
 
 export interface AcademicData {
@@ -102,4 +106,13 @@ export interface YearlyAverage {
 
 export type ViewScope = 'all' | 'yearly' | 'single';
 
-export type TabType = 'input' | 'dashboard' | 'predictions' | 'transcript' | 'notes' | 'help';
+export type TabType =
+    | 'input'
+    | 'dashboard'
+    | 'predictions'
+    | 'transcript'
+    | 'notes'
+    | 'help'
+    | 'notifications'
+    | 'credits'
+    | 'backlog';

@@ -1,10 +1,33 @@
 import { useState, useCallback } from 'react';
 import { useAcademic } from '../context/AcademicContext';
-import type { Regulation } from '../types';
+import type { Regulation, Grade, Subject } from '../types';
+import { generateId } from '../constants/grading';
 import { uploadPDFs, fetchByHallTicket } from '../api/client';
+import { normalizeNonCreditSubject } from '../utils/nonCreditSubjects';
 import { FileUp, CheckCircle, Loader2, Sparkles, Trophy, PartyPopper, X, Paperclip } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+
+interface BackendSubject {
+    subject_code: string;
+    subject_name: string;
+    grade: string;
+    credits: number;
+    year: number;
+    sem: number;
+    internal?: number;
+    external?: number;
+    total?: number;
+    official_sem_sgpa?: number;
+    non_credit?: boolean;
+}
+
+interface BackendSemester {
+    year: number;
+    sem: number;
+    sgpa: number;
+    credits?: number;
+}
 
 // Celebratory Modal Component
 function CelebrationModal({ isOpen, onClose, studentName }: { isOpen: boolean; onClose: () => void; studentName?: string }) {
@@ -20,9 +43,9 @@ function CelebrationModal({ isOpen, onClose, studentName }: { isOpen: boolean; o
                 onClick={onClose}
             >
                 <motion.div
-                    initial={{ scale: 0.85, opacity: 0 }}
+                    initial={false}
                     animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.85, opacity: 0 }}
+                    exit={{ scale: 0.95, opacity: 1 }}
                     transition={{ type: "spring", damping: 18 }}
                     className="bg-gradient-to-br from-amber-500/10 via-slate-950 to-emerald-500/10 rounded-[32px] p-10 max-w-lg w-full border border-white/10 relative overflow-hidden shadow-2xl"
                     onClick={(e) => e.stopPropagation()}
@@ -44,7 +67,7 @@ function CelebrationModal({ isOpen, onClose, studentName }: { isOpen: boolean; o
                             <Trophy className="w-10 h-10 text-black" />
                         </motion.div>
 
-                        <motion.div initial={{ y: 15, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}>
+                        <motion.div initial={false} animate={{ opacity: 1 }}>
                             <div className="flex items-center justify-center gap-2 mb-3">
                                 <PartyPopper className="w-5 h-5 text-accent animate-bounce" />
                                 <h2 className="text-2xl font-black text-white tracking-tight font-heading">AMAZING WORK!</h2>
@@ -56,7 +79,7 @@ function CelebrationModal({ isOpen, onClose, studentName }: { isOpen: boolean; o
                             <p className="text-base text-text-secondary mb-2">
                                 You have finished all <span className="text-white font-bold">4 academic years</span> with
                             </p>
-                            <p className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 mb-6 font-heading tracking-wide">
+                            <p className="text-xl font-black text-emerald-400 mb-6 font-heading tracking-wide">
                                 ABSOLUTELY ZERO BACKLOGS!
                             </p>
 
@@ -84,20 +107,27 @@ function CelebrationModal({ isOpen, onClose, studentName }: { isOpen: boolean; o
     );
 }
 
-export default function PDFUploader() {
+export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () => void }) {
     const { importSemesters, setStudentInfo, setRegulation, setOfficialCGPA, clearAllData, data } = useAcademic();
     const [isDragging, setIsDragging] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [showCelebration, setShowCelebration] = useState(false);
     const [htnoInput, setHtnoInput] = useState('');
 
-    const processResults = useCallback((subjects: any[], backendSemesters: any[], htno: string, studentName?: string, officialCGPA?: number, detectedRegulation?: Regulation) => {
+    const processResults = useCallback((
+        subjects: BackendSubject[],
+        backendSemesters: BackendSemester[],
+        htno: string,
+        studentName?: string,
+        officialCGPA?: number,
+        detectedRegulation?: Regulation
+    ) => {
         clearAllData();
 
-        const semesterMap: { [key: string]: any[] } = {};
+        const semesterMap: { [key: string]: Subject[] } = {};
         let hasAnyFail = false;
 
-        subjects.forEach((subject: any) => {
+        subjects.forEach((subject) => {
             const key = `${subject.year}-${subject.sem}`;
             if (!semesterMap[key]) semesterMap[key] = [];
 
@@ -105,34 +135,60 @@ export default function PDFUploader() {
                 hasAnyFail = true;
             }
 
-            semesterMap[key].push({
-                code: subject.subject_code,
-                name: subject.subject_name,
-                grade: subject.grade,
-                credits: subject.credits,
+            const rawCredits =
+                typeof subject.credits === 'number' && Number.isFinite(subject.credits)
+                    ? subject.credits
+                    : 0;
+            const normalized = normalizeNonCreditSubject({
                 internal: subject.internal,
                 external: subject.external,
                 total: subject.total,
+                credits: subject.non_credit ? 0 : rawCredits,
+            });
+
+            semesterMap[key].push({
+                id: generateId(),
+                code: subject.subject_code,
+                name: subject.subject_name,
+                grade: subject.grade as Grade,
+                credits: normalized.credits,
+                ...(normalized.internal !== undefined ? { internal: normalized.internal } : {}),
+                ...(normalized.external !== undefined ? { external: normalized.external } : {}),
+                ...(normalized.total !== undefined ? { total: normalized.total } : {}),
+                ...(normalized.nonCredit ? { nonCredit: true } : {}),
                 official_sem_sgpa: subject.official_sem_sgpa
             });
         });
 
         const semestersToImport = Object.entries(semesterMap).map(([key, subjects]) => {
             const [year, sem] = key.split('-').map(Number);
-            const backendSem = backendSemesters?.find((s: any) => s.year === year && s.sem === sem);
+            const backendSem = backendSemesters?.find((s) => s.year === year && s.sem === sem);
             const hasTrustedOfficialSGPA = subjects.some(
-                (subject: any) => typeof subject.official_sem_sgpa === 'number' && subject.official_sem_sgpa > 0
+                (subject) => typeof subject.official_sem_sgpa === 'number' && subject.official_sem_sgpa > 0
             );
 
             if (!hasTrustedOfficialSGPA && typeof backendSem?.sgpa === 'number' && subjects.length > 0) {
                 subjects[0].official_sem_sgpa = backendSem.sgpa;
             }
 
-            return { id: key, year, sem, subjects, isExpanded: false, mode: 'detailed' as const };
+            const officialCredits =
+                typeof backendSem?.credits === 'number' && backendSem.credits > 0
+                    ? backendSem.credits
+                    : undefined;
+
+            return {
+                id: key,
+                year,
+                sem,
+                subjects,
+                isExpanded: false,
+                mode: 'detailed' as const,
+                ...(officialCredits !== undefined ? { officialCredits } : {}),
+            };
         });
 
         if (semestersToImport.length > 0) {
-            importSemesters(semestersToImport as any);
+            importSemesters(semestersToImport);
 
             if (htno) {
                 setStudentInfo(studentName || '', htno);
@@ -163,11 +219,13 @@ export default function PDFUploader() {
                 icon: <CheckCircle className="text-accent" />
             });
 
+            onImportSuccess?.();
+
             if (semestersToImport.length >= 8 && !hasAnyFail) {
                 setTimeout(() => setShowCelebration(true), 800);
             }
         }
-    }, [clearAllData, importSemesters, setStudentInfo, setRegulation, setOfficialCGPA]);
+    }, [clearAllData, importSemesters, setStudentInfo, setRegulation, setOfficialCGPA, onImportSuccess, data.regulation]);
 
     const handleFiles = useCallback(async (files: FileList | null) => {
         if (!files || files.length === 0) return;
@@ -189,9 +247,10 @@ export default function PDFUploader() {
                 );
                 toast.dismiss(toastId);
             }
-        } catch (error: any) {
+        } catch (error) {
+            const err = error as Error;
             toast.dismiss(toastId);
-            toast.error(error.message || 'Failed to read result files');
+            toast.error(err.message || 'Failed to read result files');
         } finally {
             setIsProcessing(false);
         }
@@ -220,9 +279,10 @@ export default function PDFUploader() {
                 toast.dismiss(toastId);
                 toast.success(`Welcome, ${response.student_name || response.htno}!`);
             }
-        } catch (error: any) {
+        } catch (error) {
+            const err = error as Error;
             toast.dismiss(toastId);
-            toast.error(error?.message || 'We could not fetch results for this student ID');
+            toast.error(err.message || 'We could not fetch results for this student ID');
         } finally {
             setIsProcessing(false);
         }
@@ -240,54 +300,47 @@ export default function PDFUploader() {
                 studentName={data.studentName}
             />
 
-            <div 
-                className="relative overflow-hidden rounded-[36px] bg-gradient-to-b from-white/[0.02] to-transparent border border-white/5 p-10 md:p-14 text-center select-none"
+            <div
+                className="import-hero select-none"
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={(e) => { e.preventDefault(); setIsDragging(false); handleFiles(e.dataTransfer.files); }}
             >
-                {/* Glowing aesthetic orb behind the prompt bar */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
+                <div className="import-hero-glow" />
 
-                <div className="max-w-2xl mx-auto space-y-8 relative z-10">
+                <div className="max-w-2xl mx-auto space-y-7 relative z-10">
                     <div className="space-y-3">
-                        <h1 className="text-4xl md:text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-primary via-accent to-cyan-300 font-heading">
-                            Hello, Student.
+                        <p className="import-kicker">Results intake</p>
+                        <h1 className="import-hero-title">
+                            Import your results
                         </h1>
-                        <p className="text-sm md:text-base text-text-muted max-w-lg mx-auto font-medium">
-                            Let's discover your grades. Type your Hall Ticket ID or drop your JNTUH result PDFs directly below.
+                        <p className="text-sm md:text-[0.95rem] text-text-muted max-w-md mx-auto leading-relaxed">
+                            Enter a hall ticket or drop memo PDFs. We parse semesters, detect regulation, and sync this session.
                         </p>
                     </div>
 
-                    {/* Unified Gemini Prompt Bar */}
-                    <div className="relative w-full group">
-                        {/* Shifting Gradient Glow border */}
-                        <div className="absolute inset-0 bg-gradient-to-r from-primary via-accent to-cyan-400 rounded-full blur-md opacity-10 group-hover:opacity-20 group-focus-within:opacity-25 transition-opacity duration-500" />
-                        
-                        <div className="relative flex items-center bg-[#07080b]/90 border border-white/10 rounded-full p-2.5 pl-6 shadow-2xl focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all duration-500">
-                            
-                            {/* File Upload Paperclip */}
+                    <div className={`import-prompt-bar w-full ${isDragging ? 'is-dragging' : ''}`}>
                             <button 
                                 onClick={triggerFileSelect}
                                 disabled={isProcessing}
-                                className="p-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-primary/20 hover:border-primary/40 hover:text-white text-text-muted transition-all mr-3 flex-shrink-0 cursor-pointer group disabled:opacity-50"
+                                className="p-2.5 rounded-full bg-white/[0.04] border border-white/10 hover:bg-primary/15 hover:border-primary/35 text-text-muted transition-all mr-2.5 flex-shrink-0 cursor-pointer group disabled:opacity-50"
                                 title="Select JNTUH Result PDFs"
+                                type="button"
                             >
-                                <Paperclip className="w-5 h-5 text-primary group-hover:scale-110 transition-transform duration-300" />
+                                <Paperclip className="w-4 h-4 text-primary group-hover:scale-105 transition-transform duration-300" />
                             </button>
 
-                            {/* Main Input Text Field */}
                             <input
                                 type="text"
                                 value={htnoInput}
                                 onChange={(e) => setHtnoInput(e.target.value.toUpperCase())}
-                                placeholder="Type Hall Ticket ID... (or drop PDFs here)"
-                                className="flex-1 bg-transparent text-white font-mono font-bold placeholder:text-text-muted/50 focus:outline-none pr-4 text-base tracking-wide"
+                                placeholder="Hall ticket — or drop PDFs"
+                                className="flex-1 bg-transparent text-white font-mono font-semibold placeholder:text-text-muted/45 focus:outline-none pr-3 text-[0.95rem] tracking-wide"
                                 onKeyDown={(e) => e.key === 'Enter' && handleHtnoFetch()}
                                 disabled={isProcessing}
+                                aria-label="Hall ticket number"
                             />
 
-                            {/* Hidden file input */}
                             <input
                                 type="file"
                                 id="gemini-pdf-file"
@@ -297,32 +350,35 @@ export default function PDFUploader() {
                                 className="hidden"
                             />
 
-                            {/* Go Button */}
                             <motion.button
-                                whileHover={{ scale: 1.03 }}
-                                whileTap={{ scale: 0.97 }}
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
                                 onClick={handleHtnoFetch}
                                 disabled={isProcessing}
-                                className="bg-gradient-to-r from-primary to-accent text-white font-bold rounded-full py-3.5 px-6 flex items-center gap-2 hover:shadow-lg hover:shadow-primary/20 transition-all cursor-pointer flex-shrink-0 disabled:opacity-50 disabled:pointer-events-none"
+                                type="button"
+                                className="bg-gradient-to-r from-blue-800 to-red-700 text-white font-semibold rounded-full py-3 px-5 flex items-center gap-2 hover:shadow-lg hover:shadow-blue-900/30 transition-all cursor-pointer flex-shrink-0 disabled:opacity-50 disabled:pointer-events-none"
                             >
                                 {isProcessing ? (
                                     <Loader2 className="w-4 h-4 animate-spin" />
                                 ) : (
                                     <>
-                                        <Sparkles className="w-4 h-4" />
-                                        <span className="text-xs uppercase tracking-wider font-heading">Analyse</span>
+                                        <Sparkles className="w-3.5 h-3.5" />
+                                        <span className="text-[0.68rem] uppercase tracking-[0.12em] font-heading">Analyse</span>
                                     </>
                                 )}
                             </motion.button>
-                        </div>
                     </div>
 
-
+                    <div className="import-meta no-print">
+                        <span><i /> Auto-fetch</span>
+                        <span><i style={{ background: 'var(--accent-red-bright)' }} /> PDF parse</span>
+                        <span><i style={{ background: 'var(--accent-green)' }} /> Session-only</span>
+                    </div>
                 </div>
 
                 {/* Ambient drag drop overlay */}
                 {isDragging && (
-                    <div className="absolute inset-0 bg-[#07080b]/90 backdrop-blur-lg flex items-center justify-center z-20 pointer-events-none border-2 border-dashed border-primary rounded-[36px] animate-pulse">
+                    <div className="absolute inset-0 bg-black/90 backdrop-blur-lg flex items-center justify-center z-20 pointer-events-none border-2 border-dashed border-[var(--accent-red)] rounded-[var(--radius-xl)] animate-pulse">
                         <div className="text-center space-y-4">
                             <div className="w-20 h-20 rounded-[24px] bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto shadow-2xl">
                                 <FileUp className="w-10 h-10 text-primary" />

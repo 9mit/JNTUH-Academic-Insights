@@ -1,0 +1,113 @@
+{
+  "packs": [
+    {
+      "subject_keys": ["COMPILER DESIGN", "156AH"],
+      "title": "Compiler Design — PYQ pack",
+      "regulation": ["R18", "R22"],
+      "links": [
+        { "label": "JNTUH Compiler Design PYQs (search)", "url": "https://www.google.com/search?q=JNTUH+Compiler+Design+previous+year+question+papers+PDF", "type": "search" },
+        { "label": "All JNTUH question papers hub", "url": "https://www.google.com/search?q=JNTUH+previous+question+papers+site%3Ajntuh.ac.in+OR+site%3Ajntufastupdates.com", "type": "search" }
+      ],
+      "topics": ["Lexical analysis", "Parsers", "SDT", "Code optimization"]
+    },
+    {
+      "subject_keys": ["SOFTWARE ENGINEERING", "155DB"],
+      "title": "Software Engineering — PYQ pack",
+      "regulation": ["R18", "R22"],
+      "links": [
+        { "label": "SE previous papers", "url": "https://www.google.com/search?q=JNTUH+Software+Engineering+previous+year+question+paper+PDF", "type": "search" }
+      ],
+      "topics": ["SDLC", "SRS", "Testing", "Metrics"]
+    },
+    {
+      "subject_keys": ["COMPUTER NETWORKS", "155AN"],
+      "title": "Computer Networks — PYQ pack",
+      "regulation": ["R18", "R22"],
+      "links": [
+        { "label": "CN previous papers", "url": "https://www.google.com/search?q=JNTUH+Computer+Networks+previous+year+question+paper+PDF", "type": "search" }
+      ],
+      "topics": ["OSI", "IP routing", "TCP", "Congestion control"]
+    },
+    {
+      "subject_keys": ["WEB TECHNOLOGIES", "155DN"],
+      "title": "Web Technologies — PYQ pack",
+      "regulation": ["R18", "R22"],
+      "links": [
+        { "label": "WT previous papers", "url": "https://www.google.com/search?q=JNTUH+Web+Technologies+previous+year+question+paper+PDF", "type": "search" }
+      ],
+      "topics": ["HTML/CSS/JS", "Servlets", "JSP"]
+    },
+    {
+      "subject_keys": ["MACHINE LEARNING", "156BN"],
+      "title": "Machine Learning — PYQ pack",
+      "regulation": ["R18", "R22"],
+      "links": [
+        { "label": "ML previous papers", "url": "https://www.google.com/search?q=JNTUH+Machine+Learning+previous+year+question+paper+PDF", "type": "search" }
+      ],
+      "topics": ["Supervised learning", "Clustering", "Evaluation metrics"]
+    },
+    {
+      "subject_keys": ["FORMAL LANGUAGES & AUTOMATA THEORY", "155BK", "AUTOMATA"],
+      "title": "FLAT — PYQ pack",
+      "regulation": ["R18", "R22"],
+      "links": [
+        { "label": "FLAT previous papers", "url": "https://www.google.com/search?q=JNTUH+Formal+Languages+Automata+Theory+previous+year+question+paper+PDF", "type": "search" }
+      ],
+      "topics": ["DFA/NFA", "CFG", "PDA", "TM"]
+    },
+    {
+      "subject_keys": ["DATA MINING", "157BC"],
+      "title": "Data Mining — PYQ pack",
+      "regulation": ["R18", "R22"],
+      "links": [
+        { "label": "DM previous papers", "url": "https://www.google.com/search?q=JNTUH+Data+Mining+previous+year+question+paper+PDF", "type": "search" }
+      ],
+      "topics": ["Apriori", "Classification", "Clustering"]
+    },
+    {
+      "subject_keys": ["ARTIFICIAL INTELLIGENCE", "157AM"],
+      "title": "Artificial Intelligence — PYQ pack",
+      "regulation": ["R18", "R22"],
+      "links": [
+        { "label": "AI previous papers", "url": "https://www.google.com/search?q=JNTUH+Artificial+Intelligence+previous+year+question+paper+PDF", "type": "search" }
+      ],
+      "topics": ["Search", "Logic", "Uncertainty"]
+    },
+    {
+      "subject_keys": ["INTERNET OF THINGS", "157CD", "IOT"],
+      "title": "IoT — PYQ pack",
+      "regulation": ["R18", "R22"],
+      "links": [
+        { "label": "IoT previous papers", "url": "https://www.google.com/search?q=JNTUH+Internet+of+Things+previous+year+question+paper+PDF", "type": "search" }
+      ],
+      "topics": ["Architecture", "MQTT", "Sensors"]
+    },
+    {
+      "subject_keys": ["COMPUTER ORIENTED STATISTICAL METHODS", "153AJ", "STATISTICS"],
+      "title": "COSM — PYQ pack",
+      "regulation": ["R18", "R22"],
+      "links": [
+        { "label": "Statistics previous papers", "url": "https://www.google.com/search?q=JNTUH+Computer+Oriented+Statistical+Methods+previous+year+question+paper+PDF", "type": "search" }
+      ],
+      "topics": ["Probability", "Distributions", "Hypothesis testing"]
+    },
+    {
+      "subject_keys": ["BUSINESS ECONOMICS & FINANCIAL ANALYSIS", "154AH", "BEFA"],
+      "title": "BEFA — PYQ pack",
+      "regulation": ["R18", "R22"],
+      "links": [
+        { "label": "BEFA previous papers", "url": "https://www.google.com/search?q=JNTUH+Business+Economics+Financial+Analysis+previous+year+question+paper+PDF", "type": "search" }
+      ],
+      "topics": ["Demand", "Accounting", "Ratios"]
+    },
+    {
+      "subject_keys": ["NON-CONVENTIONAL ENERGYSOURCES", "156DX", "ENERGY"],
+      "title": "NCES — PYQ pack",
+      "regulation": ["R18", "R22"],
+      "links": [
+        { "label": "NCES previous papers", "url": "https://www.google.com/search?q=JNTUH+Non+Conventional+Energy+Sources+previous+year+question+paper+PDF", "type": "search" }
+      ],
+      "topics": ["Solar", "Wind", "Biomass"]
+    }
+  ]
+}

@@ -57,6 +57,7 @@ lerna-debug.log*
 # IDE & Editors
 # ======================
 .idea/
+.cursor/
 # .vscode/ — Keeping for project-specific settings
 *.suo
 *.ntvs*
@@ -64,6 +65,15 @@ lerna-debug.log*
 *.sln
 *.sw?
 *.code-workspace
+
+# ======================
+# Debug / agent dumps
+# ======================
+debug-*.log
+competitor_*.json
+our_result.json
+*_probe*.py
+*_check*.py
 
 # ======================
 # OS Generated Files
@@ -95,6 +105,10 @@ temp/
 *.tmp
 *.temp
 temp_*
+_*probe*.py
+_*check*.py
+competitor_*.json
+our_result.json
 
 # ======================
 # Uploaded Files

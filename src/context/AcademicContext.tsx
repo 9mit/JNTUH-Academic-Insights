@@ -1,36 +1,32 @@
-import { createContext, useContext, useCallback, useMemo, useState } from 'react';
+import { createContext, useContext, useCallback, useMemo, useState, useEffect } from 'react';
 import type { AcademicData, Semester, Subject, Regulation } from '../types';
 
 import { createEmptySemesters, generateId, toPercentage } from '../constants/grading';
 import { getSemesterSGPA, calculateCGPA } from '../utils/calculations';
+import { purgeClientStorage, installSessionPrivacyGuards } from '../utils/sessionPrivacy';
 
-// ... (interface restored)
 interface AcademicContextType {
     data: AcademicData;
 
-    // Semester actions
     setSemesterMode: (semesterId: string, mode: 'detailed' | 'manual') => void;
     toggleSemesterExpand: (semesterId: string) => void;
     setManualSGPA: (semesterId: string, sgpa: number | null) => void;
 
-    // Subject actions
     addSubject: (semesterId: string, subject?: Partial<Subject>) => void;
     updateSubject: (semesterId: string, subjectId: string, updates: Partial<Subject>) => void;
     removeSubject: (semesterId: string, subjectId: string) => void;
 
-    // Bulk actions
     setRegulation: (regulation: Regulation) => void;
     setStudentInfo: (name?: string, hallTicket?: string) => void;
     updateStudentInfo: (data: { name?: string; hallTicket?: string }) => void;
     setOfficialCGPA: (cgpa: number) => void;
     importSemesters: (semesters: Partial<Semester>[]) => void;
+    hydrateAcademicData: (payload: AcademicData) => void;
     clearAllData: () => void;
 
-    // Computed values
     getSGPA: (semesterId: string) => number;
     getCGPA: () => { cgpa: number; percentage: number; totalCredits: number };
 }
-
 
 const AcademicContext = createContext<AcademicContextType | null>(null);
 
@@ -42,9 +38,14 @@ const initialData: AcademicData = {
 };
 
 export function AcademicProvider({ children }: { children: React.ReactNode }) {
-    // UPDATED: Using useState instead of useLocalStorage ensures data rests on reload
     const [data, setData] = useState<AcademicData>(initialData);
 
+    // Session-only by default: purge ephemeral storage on load.
+    // Opt-in encrypted vault is preserved (see sessionPrivacy / encryptedVault).
+    useEffect(() => {
+        void purgeClientStorage();
+        return installSessionPrivacyGuards();
+    }, []);
 
     const updateSemester = useCallback((semesterId: string, updates: Partial<Semester>) => {
         setData(prev => ({
@@ -53,7 +54,7 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
                 sem.id === semesterId ? { ...sem, ...updates } : sem
             ),
         }));
-    }, [setData]);
+    }, []);
 
     const setSemesterMode = useCallback((semesterId: string, mode: 'detailed' | 'manual') => {
         updateSemester(semesterId, { mode });
@@ -66,11 +67,26 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
                 sem.id === semesterId ? { ...sem, isExpanded: !sem.isExpanded } : sem
             ),
         }));
-    }, [setData]);
+    }, []);
 
     const setManualSGPA = useCallback((semesterId: string, sgpa: number | null) => {
-        updateSemester(semesterId, { manualSGPA: sgpa });
-    }, [updateSemester]);
+        setData(prev => ({
+            ...prev,
+            official_cgpa: undefined,
+            semesters: prev.semesters.map(sem => {
+                if (sem.id !== semesterId) return sem;
+                return {
+                    ...sem,
+                    manualSGPA: sgpa,
+                    subjects: sem.subjects.map(sub => {
+                        const next = { ...sub };
+                        delete next.official_sem_sgpa;
+                        return next;
+                    }),
+                };
+            }),
+        }));
+    }, []);
 
     const addSubject = useCallback((semesterId: string, subject?: Partial<Subject>) => {
         const newSubject: Subject = {
@@ -78,53 +94,68 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
             code: subject?.code,
             name: subject?.name || '',
             grade: subject?.grade || 'O',
-            credits: subject?.credits || 3,
+            credits: subject?.credits ?? 3,
             ...(subject?.internal !== undefined && { internal: subject.internal }),
             ...(subject?.external !== undefined && { external: subject.external }),
             ...(subject?.total !== undefined && { total: subject.total }),
+            ...(subject?.nonCredit !== undefined && { nonCredit: subject.nonCredit }),
             ...(subject?.official_sem_sgpa !== undefined && { official_sem_sgpa: subject.official_sem_sgpa }),
         };
 
         setData(prev => ({
             ...prev,
+            // User-driven add clears locked official CGPA so recalculation applies
+            official_cgpa: subject?.official_sem_sgpa !== undefined ? prev.official_cgpa : undefined,
             semesters: prev.semesters.map(sem =>
                 sem.id === semesterId
                     ? { ...sem, subjects: [...sem.subjects, newSubject] }
                     : sem
             ),
         }));
-    }, [setData]);
+    }, []);
 
     const updateSubject = useCallback((semesterId: string, subjectId: string, updates: Partial<Subject>) => {
         setData(prev => ({
             ...prev,
-            semesters: prev.semesters.map(sem =>
-                sem.id === semesterId
-                    ? {
-                        ...sem,
-                        subjects: sem.subjects.map(sub =>
-                            sub.id === subjectId ? { ...sub, ...updates } : sub
-                        ),
-                    }
-                    : sem
-            ),
+            // Grade/credit edits invalidate memo-locked official scores
+            official_cgpa: undefined,
+            semesters: prev.semesters.map(sem => {
+                if (sem.id !== semesterId) return sem;
+                return {
+                    ...sem,
+                    subjects: sem.subjects.map(sub => {
+                        const next = sub.id === subjectId ? { ...sub, ...updates } : { ...sub };
+                        delete next.official_sem_sgpa;
+                        return next;
+                    }),
+                };
+            }),
         }));
-    }, [setData]);
+    }, []);
 
     const removeSubject = useCallback((semesterId: string, subjectId: string) => {
         setData(prev => ({
             ...prev,
-            semesters: prev.semesters.map(sem =>
-                sem.id === semesterId
-                    ? { ...sem, subjects: sem.subjects.filter(sub => sub.id !== subjectId) }
-                    : sem
-            ),
+            official_cgpa: undefined,
+            semesters: prev.semesters.map(sem => {
+                if (sem.id !== semesterId) return sem;
+                return {
+                    ...sem,
+                    subjects: sem.subjects
+                        .filter(sub => sub.id !== subjectId)
+                        .map(sub => {
+                            const next = { ...sub };
+                            delete next.official_sem_sgpa;
+                            return next;
+                        }),
+                };
+            }),
         }));
-    }, [setData]);
+    }, []);
 
     const setRegulation = useCallback((regulation: Regulation) => {
         setData(prev => ({ ...prev, regulation }));
-    }, [setData]);
+    }, []);
 
     const setStudentInfo = useCallback((name?: string, hallTicket?: string) => {
         setData(prev => ({
@@ -132,7 +163,7 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
             studentName: name !== undefined ? name : prev.studentName,
             hallTicket: hallTicket !== undefined ? hallTicket : prev.hallTicket,
         }));
-    }, [setData]);
+    }, []);
 
     const updateStudentInfo = useCallback((info: { name?: string; hallTicket?: string }) => {
         setStudentInfo(info.name, info.hallTicket);
@@ -157,6 +188,9 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
                                 id: generateId(),
                             })),
                             isExpanded: true,
+                            ...(typeof parsed.officialCredits === 'number'
+                                ? { officialCredits: parsed.officialCredits }
+                                : {}),
                         };
                     } else if (parsed.manualSGPA !== undefined && parsed.manualSGPA !== null) {
                         newSemesters[idx] = {
@@ -171,7 +205,35 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
 
             return { ...prev, semesters: newSemesters };
         });
-    }, [setData]);
+    }, []);
+
+    const hydrateAcademicData = useCallback((payload: AcademicData) => {
+        const base = createEmptySemesters();
+        const merged = base.map((empty) => {
+            const match = payload.semesters.find((s) => s.year === empty.year && s.sem === empty.sem);
+            if (!match) return empty;
+            return {
+                ...empty,
+                mode: match.mode || 'detailed',
+                manualSGPA: match.manualSGPA ?? null,
+                isExpanded: true,
+                subjects: (match.subjects || []).map((sub) => ({
+                    ...sub,
+                    id: sub.id || generateId(),
+                })),
+                ...(typeof match.officialCredits === 'number'
+                    ? { officialCredits: match.officialCredits }
+                    : {}),
+            };
+        });
+        setData({
+            regulation: payload.regulation || 'R22',
+            semesters: merged,
+            studentName: payload.studentName || '',
+            hallTicket: payload.hallTicket || '',
+            official_cgpa: payload.official_cgpa,
+        });
+    }, []);
 
     const clearAllData = useCallback(() => {
         setData({
@@ -180,35 +242,35 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
             studentName: '',
             hallTicket: '',
         });
-    }, [setData]);
+        void purgeClientStorage();
+    }, []);
 
     const getSGPA = useCallback((semesterId: string): number => {
         const semester = data.semesters.find(s => s.id === semesterId);
         if (!semester) return 0;
-        return getSemesterSGPA(semester);
-    }, [data.semesters]);
+        return getSemesterSGPA(semester, data.regulation);
+    }, [data.semesters, data.regulation]);
 
     const setOfficialCGPA = useCallback((cgpa: number) => {
         setData(prev => ({ ...prev, official_cgpa: cgpa }));
-    }, [setData]);
+    }, []);
 
     const getCGPA = useCallback(() => {
-        // If official CGPA exists and is valid, use it
         if (data.official_cgpa && data.official_cgpa > 0) {
             return {
                 cgpa: data.official_cgpa,
                 percentage: toPercentage(data.official_cgpa),
-                totalCredits: calculateCGPA(data.semesters).totalCredits
+                totalCredits: calculateCGPA(data.semesters, data.regulation).totalCredits
             };
         }
 
-        const result = calculateCGPA(data.semesters);
+        const result = calculateCGPA(data.semesters, data.regulation);
         return {
             cgpa: result.cgpa,
             percentage: result.percentage,
             totalCredits: result.totalCredits,
         };
-    }, [data.semesters, data.official_cgpa]);
+    }, [data.semesters, data.official_cgpa, data.regulation]);
 
     const contextValue = useMemo(() => ({
         data,
@@ -223,6 +285,7 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
         updateStudentInfo,
         setOfficialCGPA,
         importSemesters,
+        hydrateAcademicData,
         clearAllData,
         getSGPA,
         getCGPA,
@@ -239,6 +302,7 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
         updateStudentInfo,
         setOfficialCGPA,
         importSemesters,
+        hydrateAcademicData,
         clearAllData,
         getSGPA,
         getCGPA,
@@ -251,6 +315,7 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
     );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAcademic() {
     const context = useContext(AcademicContext);
     if (!context) {

@@ -11,13 +11,20 @@ from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import List, Optional, Dict, Any
+from urllib.parse import quote
 
 import pandas as pd
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Response
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent / ".env")
+except ImportError:
+    pass
 
 from backend.data_processor import AcademicProcessor
 from backend.analyzer import AcademicAnalyzer
@@ -26,6 +33,22 @@ from backend.shared import (
     VALID_GRADES_BY_REGULATION,
     detect_regulation,
     get_grade_points,
+)
+from backend.share_tokens import create_share_token, verify_share_token
+from backend.notifications import fetch_notifications, filter_notifications
+from backend.calendars import fetch_calendars
+from backend.grace_marks import check_grace_eligibility
+from backend.study_packs import get_syllabus_gap, get_pyq_pack, list_pyq_packs
+from backend.non_credit import normalize_non_credit_subject
+from backend.security import (
+    check_rate_limit,
+    get_cors_origins,
+    validate_production_config,
+    is_production,
+    mask_hall_ticket,
+    FETCH_LIMIT,
+    PDF_LIMIT,
+    SHARE_LIMIT,
 )
 
 # Removed Playwright Imports
@@ -52,7 +75,6 @@ UPLOAD_DIR = Path(tempfile.gettempdir()) / "jntuh_pending_notes"
 
 # Globals
 SYLLABUS_DATA: Dict[str, Any] = {}
-BROWSER_SEMAPHORE: Optional[asyncio.Semaphore] = None
 THREAD_POOL: Optional[ThreadPoolExecutor] = None
 KEEP_ALIVE_TASK: Optional[asyncio.Task] = None
 
@@ -98,7 +120,7 @@ async def keep_alive_ping():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Modern FastAPI lifecycle manager for startup/shutdown events."""
-    global SYLLABUS_DATA, BROWSER_SEMAPHORE, THREAD_POOL, KEEP_ALIVE_TASK
+    global SYLLABUS_DATA, THREAD_POOL, KEEP_ALIVE_TASK
     
     # Load Syllabus
     if SYLLABUS_PATH.exists():
@@ -111,9 +133,13 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning(f"Syllabus file not found at {SYLLABUS_PATH}")
 
-    # Initialize Concurrency Limits globally
-    BROWSER_SEMAPHORE = asyncio.Semaphore(3)
+    # Initialize concurrency limits globally
     THREAD_POOL = ThreadPoolExecutor(max_workers=3)
+
+    # Warm external feeds in background threads (non-blocking for startup)
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(THREAD_POOL, fetch_notifications)
+    await loop.run_in_executor(THREAD_POOL, fetch_calendars)
     
     # Ensure upload dir exists
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -125,6 +151,8 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Keep-alive self-ping DISABLED (set ENABLE_KEEP_ALIVE=true to activate).")
 
+    # Production security: fail fast if secrets are missing
+    validate_production_config()
     logger.info("Application startup complete. Lifespan triggered successfully.")
     
     yield  # App runs here
@@ -136,19 +164,43 @@ async def lifespan(app: FastAPI):
         THREAD_POOL.shutdown(wait=False)
     logger.info("Application shutdown complete.")
 
-app = FastAPI(title="JNTUH Academic Insights API", lifespan=lifespan)
+app = FastAPI(
+    title="JNTUH Academic Insights API",
+    lifespan=lifespan,
+    docs_url=None if is_production() else "/docs",
+    redoc_url=None if is_production() else "/redoc",
+    openapi_url=None if is_production() else "/openapi.json",
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=get_cors_origins(),
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
 
 # ==========================================
 # SECURITY HEADERS & HELPERS
 # ==========================================
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    path = request.url.path
+    try:
+        if path.startswith("/fetch/"):
+            check_rate_limit(request, FETCH_LIMIT)
+        elif path.startswith("/analyze/"):
+            check_rate_limit(request, PDF_LIMIT)
+        elif path.startswith("/api/share") and request.method == "POST":
+            check_rate_limit(request, SHARE_LIMIT)
+        elif path.startswith("/api/grace-marks"):
+            check_rate_limit(request, 30)
+    except HTTPException as exc:
+        # BaseHTTPMiddleware cannot safely re-raise HTTPException — return response
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def add_security_headers(request, call_next):
     response = await call_next(request)
@@ -157,17 +209,19 @@ async def add_security_headers(request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if request.url.path.startswith(("/api/", "/fetch/", "/analyze/", "/predict/", "/notes/")):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cloud.umami.is; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data: blob:; "
-        "connect-src 'self' https://*.supabase.co https://jntuhresults.dhethi.com; "
+        "connect-src 'self' https://*.supabase.co https://jntuhresults.dhethi.com https://cloud.umami.is https://*.umami.is; "
         "frame-ancestors 'none';"
     )
-    # Add HSTS in production (when served behind HTTPS on Render)
-    if os.environ.get("RENDER_EXTERNAL_URL"):
+    if is_production():
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
@@ -206,7 +260,42 @@ def check_pdf_file(file: UploadFile):
         pass
 
 if DIST_PATH.exists():
-    app.mount("/assets", StaticFiles(directory=DIST_PATH / "assets"), name="assets")
+    _assets_dir = DIST_PATH / "assets"
+    if _assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="frontend_assets")
+
+
+@app.get("/assets/{asset_path:path}", include_in_schema=False)
+async def serve_frontend_asset(asset_path: str):
+    """Fallback asset route — works even if StaticFiles mount was skipped at import."""
+    target = DIST_PATH / "assets" / asset_path
+    if target.is_file():
+        return FileResponse(target)
+    raise HTTPException(status_code=404, detail="Asset not found")
+
+
+@app.get("/sw.js", include_in_schema=False)
+async def serve_sw():
+    sw = BASE_DIR / "public" / "sw.js"
+    if sw.is_file():
+        return FileResponse(sw, media_type="application/javascript")
+    raise HTTPException(status_code=404)
+
+
+@app.get("/vite.svg", include_in_schema=False)
+async def serve_vite_icon():
+    icon = BASE_DIR / "public" / "vite.svg"
+    if icon.is_file():
+        return FileResponse(icon, media_type="image/svg+xml")
+    raise HTTPException(status_code=404)
+
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+async def serve_manifest():
+    manifest = BASE_DIR / "public" / "manifest.webmanifest"
+    if manifest.is_file():
+        return FileResponse(manifest, media_type="application/manifest+json")
+    raise HTTPException(status_code=404)
 
 
 # ==========================================
@@ -215,7 +304,11 @@ if DIST_PATH.exists():
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint — pinged by the keep-alive task to prevent Render spin-down."""
-    return {"status": "ok", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    return {
+        "status": "ok",
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "frontend_built": (DIST_PATH / "index.html").exists(),
+    }
 
 # ==========================================
 # PYDANTIC MODELS
@@ -258,14 +351,17 @@ class AdvancedAnalysisRequest(BaseModel):
 
 
 
-def infer_credits(code: str, name: str, year: int, sem: int, regulation: str) -> float:
+def infer_credits(code: str, name: str, year: int, sem: int, regulation: str, grade: str = "") -> float:
+    """Infer credits when API returns 0. Prefer syllabus; avoid inventing pass-theory credits."""
     name_lower = name.lower().strip() if name else ""
     code_upper = code.upper().strip() if code else ""
     code_lower = code.lower().strip() if code else ""
     is_old_regulation = regulation in ("R13", "R15", "R16")
-    
+    grade_norm = (grade or "").strip()
+    is_fail = grade_norm in ("F", "Ab", "AB", "ABSENT")
+
     zero_credit_courses = [
-        "environmental", "constitution", "ethics", "gender sensitization", 
+        "environmental", "constitution", "ethics", "gender sensitization",
         "human values", "cyber security", "audit", "non-credit", "ncc", "nss", "sports"
     ]
     if any(kw in name_lower for kw in zero_credit_courses):
@@ -274,21 +370,40 @@ def infer_credits(code: str, name: str, year: int, sem: int, regulation: str) ->
     if regulation in SYLLABUS_DATA and "subjects" in SYLLABUS_DATA[regulation]:
         if code_upper in SYLLABUS_DATA[regulation]["subjects"]:
             return float(SYLLABUS_DATA[regulation]["subjects"][code_upper]["credits"])
-    
-    project_keywords = ["project work", "main project", "major project", "dissertation"]
-    if year == 4 and sem == 2 and any(kw in name_lower for kw in project_keywords): return 10.0
-    if year == 4 and sem == 2 and ("viva" in name_lower or "comprehensive" in name_lower): return 2.0
-    if any(kw in name_lower for kw in ["seminar", "colloq", "presentation"]): return 2.0
-    if "mini project" in name_lower or "course project" in name_lower: return 3.0 if is_old_regulation else 2.0
-    if "project" in name_lower: return 2.0
+
+    # Labs / workshops — safe for both pass and fail zeros
     if (code_lower.endswith("l") and len(code_upper) >= 5) or "lab" in name_lower or "practical" in name_lower:
         return 2.0 if is_old_regulation else 1.5
-    if any(kw in name_lower for kw in ["workshop", "skill", "induction", "communication"]):
+    if any(kw in name_lower for kw in ["workshop", "skill", "induction"]):
         return 2.0 if is_old_regulation else 1.0
-    
-    heavy_theory = ["mathematics", "calculus", "statistics", "probability", "physics", "chemistry", "mechanics"]
-    if any(kw in name_lower for kw in heavy_theory): return 4.0
-    return 3.0
+    if "mini project" in name_lower or "course project" in name_lower:
+        return 3.0 if is_old_regulation else 2.0
+
+    project_keywords = ["project work", "main project", "major project", "dissertation"]
+    if year == 4 and sem == 2 and any(kw in name_lower for kw in project_keywords):
+        return 10.0
+    if year == 4 and sem == 2 and ("viva" in name_lower or "comprehensive" in name_lower):
+        return 2.0
+
+    # Failures still need a weight for backlog/lost accounting
+    if is_fail:
+        if any(kw in name_lower for kw in ["seminar", "colloq", "presentation"]):
+            return 2.0
+        if "project" in name_lower:
+            return 2.0
+        heavy_theory = ["mathematics", "calculus", "statistics", "probability", "physics", "chemistry", "mechanics"]
+        if any(kw in name_lower for kw in heavy_theory):
+            return 4.0
+        return 3.0
+
+    # Pass with 0 and no syllabus hit: leave 0 (do not invent 3.0 theory credits)
+    return 0.0
+
+
+def resolve_subject_credits(raw_credits: float, code: str, name: str, year: int, sem: int, regulation: str, grade: str) -> float:
+    if raw_credits and raw_credits > 0:
+        return float(raw_credits)
+    return infer_credits(code, name, year, sem, regulation, grade)
 
 def get_student_status_from_semesters(semesters: List[dict], subjects: List[dict], regulation: str = "R18") -> str:
     """
@@ -328,7 +443,9 @@ def fetch_api_and_parse(htno: str) -> dict:
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json',
         'Origin': 'https://jntuhconnect.dhethi.com',
-        'Referer': 'https://jntuhconnect.dhethi.com/'
+        'Referer': 'https://jntuhconnect.dhethi.com/',
+        # Required by jntuhresults.dhethi.com (same key used by jntuhconnect frontend)
+        'X-Api-Key': os.environ.get('JNTUH_RESULTS_API_KEY', 'kanipinchinda'),
     }
     
     # Poll the API since it queues requests
@@ -377,34 +494,54 @@ def fetch_api_and_parse(htno: str) -> dict:
         for subj in sem_subjects:
             grade = subj.get("grades", "").strip()
             gp = get_grade_points(grade, detected_regulation)
+            code = subj.get("subjectCode", "").strip()
+            name = subj.get("subjectName", "").strip()
+
+            # Trust upstream API credits exactly (original logic). Do not invent pass credits.
+            # F/Ab often arrive as 0 — backlog planner may infer client-side without mutating earned totals.
+            try:
+                credits = float(subj.get("credits", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                credits = 0.0
             
-            # Extract marks if available in API
+            # Extract marks if available in API; normalize non-credit Int/Ext swap
             internal = subj.get("internalMarks")
             external = subj.get("externalMarks")
             total = subj.get("totalMarks")
-            
-            subjects.append({
-                "subject_code": subj.get("subjectCode", "").strip(),
-                "subject_name": subj.get("subjectName", "").strip(),
+            normalized = normalize_non_credit_subject(internal, external, total, credits)
+
+            subject_row = {
+                "subject_code": code,
+                "subject_name": name,
                 "grade": grade,
-                "credits": float(subj.get("credits", 0.0)),
+                "credits": normalized["credits"],
                 "grade_points": gp,
                 "year": year,
                 "sem": sem,
                 "htno": htno,
                 "regulation": detected_regulation,
-                "internal": internal if isinstance(internal, (int, float)) else None,
-                "external": external if isinstance(external, (int, float)) else None,
-                "total": total if isinstance(total, (int, float)) else None
-            })
+                "non_credit": bool(normalized.get("non_credit")),
+            }
+            if "internal" in normalized:
+                subject_row["internal"] = normalized["internal"]
+            if "external" in normalized:
+                subject_row["external"] = normalized["external"]
+            if "total" in normalized:
+                subject_row["total"] = normalized["total"]
+            subjects.append(subject_row)
             
         sgpa_val = float(sem_data.get("semesterSGPA", 0.0)) if str(sem_data.get("semesterSGPA")).replace('.', '', 1).isdigit() else 0.0
+
+        try:
+            sem_credits = float(sem_data.get("semesterCredits", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            sem_credits = 0.0
         
         semesters.append({
             "year": year,
             "sem": sem,
             "sgpa": sgpa_val,
-            "credits": float(sem_data.get("semesterCredits", 0.0))
+            "credits": sem_credits,
         })
         
     official_cgpa = None
@@ -434,10 +571,32 @@ def fetch_api_and_parse(htno: str) -> dict:
 # ==========================================
 @app.get("/")
 def read_root():
+    """Serve the React app when built; otherwise explain how to run the UI."""
     index_file = DIST_PATH / "index.html"
     if index_file.exists():
-        return HTMLResponse(content=index_file.read_text(), status_code=200)
-    return {"message": "JNTUH Academic Insights API is running"}
+        return HTMLResponse(content=index_file.read_text(encoding="utf-8"), status_code=200)
+
+    # No frontend build present — this is NOT a data leak, just API-only mode.
+    return HTMLResponse(
+        content="""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><title>JNTUH Academic Insights API</title>
+<style>body{font-family:system-ui;max-width:40rem;margin:3rem auto;padding:0 1rem;line-height:1.5}
+code{background:#f3f4f6;padding:.1rem .35rem;border-radius:4px}</style></head>
+<body>
+<h1>API is running</h1>
+<p>You opened the <strong>backend only</strong>. The React UI is not being served from this port because <code>dist/</code> is missing.</p>
+<p><strong>Local development (recommended):</strong></p>
+<ol>
+<li>Keep this API on port <code>8000</code></li>
+<li>In another terminal run <code>npm run dev</code></li>
+<li>Open <a href="http://localhost:5173">http://localhost:5173</a> — use that for all features</li>
+</ol>
+<p><strong>Or single-port mode:</strong> run <code>npm run build</code>, restart this server, then reload this page.</p>
+<p>Health: <a href="/api/health"><code>/api/health</code></a> · Docs: <a href="/docs"><code>/docs</code></a></p>
+<p style="color:#666;font-size:.9rem">This page does not contain student grades or hall-ticket data.</p>
+</body></html>""",
+        status_code=200,
+    )
 
 
 @app.post("/fetch/htno")
@@ -456,70 +615,78 @@ async def fetch_by_hall_ticket(request: HallTicketRequest):
         loop = asyncio.get_running_loop()
         try:
             result = await loop.run_in_executor(THREAD_POOL, fetch_api_and_parse, htno)
-            logger.info(f"Successfully fetched {result['total_subjects']} subjects for {htno} via REST API")
+            logger.info(f"Successfully fetched {result['total_subjects']} subjects for {mask_hall_ticket(htno)} via REST API")
             return result
         except Exception as e:
             # Re-raise HTTP exceptions explicitly defined in fetch_api_and_parse
             if isinstance(e, HTTPException):
                 raise e
-            logger.error(f"API failure for {htno}: {e}")
+            logger.error(f"API failure for {mask_hall_ticket(htno)}: {e}")
             raise HTTPException(status_code=500, detail="Data provider failed. Please use PDF Upload.")
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception(f"Unexpected error processing {htno}")
+        logger.exception(f"Unexpected error processing {mask_hall_ticket(htno)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch results: {str(e)}")
 
 
 @app.post("/analyze/pdf")
 async def analyze_pdf(files: List[UploadFile] = File(...)):
-    processor = AcademicProcessor()
-    processed_count = 0
-    
+    file_buffers: List[bytes] = []
     try:
         for file in files:
-            # Strictly validate the PDF file size & content
             check_pdf_file(file)
-            contents = await file.read()
-            if processor.parse_pdf(io.BytesIO(contents)):
-                processed_count = processed_count + 1
-                
-        if processed_count == 0:
-            raise HTTPException(status_code=400, detail="Could not parse provided PDFs")
-            
-        def clean_dict_list(d_list):
-            return [{k: (None if pd.isna(v) else v) for k, v in d.items()} for d in d_list]
+            file_buffers.append(await file.read())
 
-        subjects = clean_dict_list(processor.subjects_df.to_dict(orient='records'))
-        semesters = clean_dict_list(processor.semesters_df.to_dict(orient='records'))
-        
-        student_info = processor.get_student_info()
-        htno = student_info.get('htno') or (subjects[0].get('htno') if subjects else None)
-        
-        # Get student status
-        student_status = processor.get_student_status()
-        completed_semesters = processor.get_completed_semester_count()
-        backlogs = processor.get_backlogs()
+        if not file_buffers:
+            raise HTTPException(status_code=400, detail="No PDF files provided")
 
-        return {
-            "success": True,
-            "processed_count": processed_count,
-            "subjects": subjects,
-            "semesters": semesters,
-            "cgpa": None if pd.isna(processor.get_cgpa()) else processor.get_cgpa(),
-            "official_cgpa": None if pd.isna(processor.official_cgpa) else processor.official_cgpa,
-            "percentage": None if pd.isna(processor.get_percentage()) else processor.get_percentage(),
-            "htno": htno,
-            "student_name": student_info.get('name'),
-            "student_status": student_status,
-            "completed_semesters": completed_semesters,
-            "total_semesters": 8,
-            "backlogs_count": len(backlogs),
-            "regulation": student_info.get('regulation', detect_regulation(htno or ''))
-        }
-    except HTTPException as he:
-        raise he
+        def parse_pdfs_sync(buffers: List[bytes]) -> Dict[str, Any]:
+            processor = AcademicProcessor()
+            processed_count = 0
+            for contents in buffers:
+                if processor.parse_pdf(io.BytesIO(contents)):
+                    processed_count += 1
+
+            if processed_count == 0:
+                raise ValueError("Could not parse provided PDFs")
+
+            def clean_dict_list(d_list):
+                return [{k: (None if pd.isna(v) else v) for k, v in d.items()} for d in d_list]
+
+            subjects = clean_dict_list(processor.subjects_df.to_dict(orient='records'))
+            semesters = clean_dict_list(processor.semesters_df.to_dict(orient='records'))
+            student_info = processor.get_student_info()
+            htno = student_info.get('htno') or (subjects[0].get('htno') if subjects else None)
+            student_status = processor.get_student_status()
+            completed_semesters = processor.get_completed_semester_count()
+            backlogs = processor.get_backlogs()
+
+            return {
+                "success": True,
+                "processed_count": processed_count,
+                "subjects": subjects,
+                "semesters": semesters,
+                "cgpa": None if pd.isna(processor.get_cgpa()) else processor.get_cgpa(),
+                "official_cgpa": None if pd.isna(processor.official_cgpa) else processor.official_cgpa,
+                "percentage": None if pd.isna(processor.get_percentage()) else processor.get_percentage(),
+                "htno": htno,
+                "student_name": student_info.get('name'),
+                "student_status": student_status,
+                "completed_semesters": completed_semesters,
+                "total_semesters": 8,
+                "backlogs_count": len(backlogs),
+                "regulation": student_info.get('regulation', detect_regulation(htno or '')),
+            }
+
+        loop = asyncio.get_event_loop()
+        try:
+            return await loop.run_in_executor(THREAD_POOL, parse_pdfs_sync, file_buffers)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"PDF Analysis error: {e}")
         raise HTTPException(status_code=500, detail="Error analyzing PDF documents.")
@@ -528,7 +695,7 @@ async def analyze_pdf(files: List[UploadFile] = File(...)):
 @app.post("/predict/sgpa")
 async def predict_next_sgpa(data: List[SemesterSGPARecord]):
     try:
-        analyzer = AcademicAnalyzer(pd.DataFrame([d.dict() for d in data]))
+        analyzer = AcademicAnalyzer(pd.DataFrame([d.model_dump() for d in data]))
         return {
             "prediction": analyzer.predict_next_sgpa(),
             "insights": analyzer.get_insights()
@@ -547,8 +714,8 @@ async def analyze_advanced(request: AdvancedAnalysisRequest):
              }
         
         analyzer = AcademicAnalyzer(
-            semesters_df=pd.DataFrame([d.dict() for d in request.semesters]), 
-            subjects_df=pd.DataFrame([d.dict() for d in request.subjects])
+            semesters_df=pd.DataFrame([d.model_dump() for d in request.semesters]),
+            subjects_df=pd.DataFrame([d.model_dump() for d in request.subjects])
         )
         
         return {
@@ -563,10 +730,9 @@ async def analyze_advanced(request: AdvancedAnalysisRequest):
 # ==========================================
 # FILE DOWNLOAD/UPLOAD SYSTEM
 # ==========================================
-@app.get("/notes/catalog")
-async def get_notes_catalog():
-    catalog = {"regulations": []}
-    
+def _build_notes_catalog() -> Dict[str, Any]:
+    catalog: Dict[str, Any] = {"regulations": []}
+
     if R18_NOTES_PATH.exists():
         r18_data: Dict[str, Any] = {"name": "R18", "path": "R18", "years": []}
         for year_folder in sorted(R18_NOTES_PATH.iterdir()):
@@ -578,7 +744,6 @@ async def get_notes_catalog():
                         for subject_folder in sorted(sem_folder.iterdir()):
                             if subject_folder.is_dir():
                                 subject_data: Dict[str, Any] = {"name": subject_folder.name, "path": f"{year_folder.name}/{sem_folder.name}/{subject_folder.name}", "files": []}
-                                # Recursively find all PDFs inside the subject folder (including subfolders like HWN)
                                 for pdf_file in sorted(subject_folder.rglob("*.pdf")):
                                     if pdf_file.is_file():
                                         rel_to_notes = pdf_file.relative_to(R18_NOTES_PATH)
@@ -587,14 +752,15 @@ async def get_notes_catalog():
                                             "path": f"R18/{rel_to_notes.as_posix()}",
                                             "size": pdf_file.stat().st_size
                                         })
-                                if subject_data["files"]: 
+                                if subject_data["files"]:
                                     sem_data["subjects"].append(subject_data)
-                        if sem_data["subjects"]: 
+                        if sem_data["subjects"]:
                             year_data["semesters"].append(sem_data)
-                if year_data["semesters"]: 
+                if year_data["semesters"]:
                     r18_data["years"].append(year_data)
-        if r18_data["years"]: catalog["regulations"].append(r18_data)
-    
+        if r18_data["years"]:
+            catalog["regulations"].append(r18_data)
+
     if R22_NOTES_PATH.exists():
         r22_data: Dict[str, Any] = {"name": "R22", "path": "R22", "files": []}
         for pdf_file in sorted(R22_NOTES_PATH.rglob("*.pdf")):
@@ -606,9 +772,16 @@ async def get_notes_catalog():
                     "path": f"R22/{rel_to_notes.as_posix()}",
                     "size": pdf_file.stat().st_size
                 })
-        if r22_data["files"]: catalog["regulations"].append(r22_data)
-    
+        if r22_data["files"]:
+            catalog["regulations"].append(r22_data)
+
     return catalog
+
+
+@app.get("/notes/catalog")
+async def get_notes_catalog():
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(THREAD_POOL, _build_notes_catalog)
 
 @app.get("/notes/download")
 async def download_note(path: str):
@@ -709,6 +882,99 @@ async def upload_note(
     except Exception as e:
         logger.error(f"Error uploading note: {e}")
         raise HTTPException(status_code=500, detail="File upload failed")
+
+
+# ==========================================
+# HELPFUL APIs (Notifications, Search, Syllabus, Grace Marks, Share)
+# ==========================================
+class ShareTokenRequest(BaseModel):
+    data: Dict[str, Any]
+
+
+class GraceMarksRequest(BaseModel):
+    subjects: List[Dict[str, Any]]
+    regulation: str = "R18"
+
+
+@app.get("/api/notifications")
+async def get_notifications(
+    exam_year: Optional[str] = None,
+    degree: Optional[str] = None,
+    regulation: Optional[str] = None,
+    category: Optional[str] = None,
+    q: Optional[str] = None,
+    refresh: Optional[bool] = False,
+):
+    loop = asyncio.get_event_loop()
+    items = await loop.run_in_executor(
+        THREAD_POOL,
+        lambda: fetch_notifications(force=bool(refresh)),
+    )
+    return {
+        "items": filter_notifications(items, exam_year, degree, regulation, category, q),
+        "source": "https://www.jntufastupdates.com/jntu-hyderabad/",
+        "disclaimer": "Unofficial aggregator. Verify critical dates on jntuh.ac.in.",
+    }
+
+
+@app.get("/api/calendars")
+async def get_calendars(degree: Optional[str] = None):
+    loop = asyncio.get_event_loop()
+    items = await loop.run_in_executor(THREAD_POOL, fetch_calendars)
+    if degree:
+        items = [c for c in items if c.get("degree") == degree]
+    return {"items": items}
+
+
+@app.get("/api/syllabus/gap")
+async def syllabus_gap(subject_name: str = "", subject_code: str = ""):
+    return get_syllabus_gap(subject_name=subject_name, subject_code=subject_code)
+
+
+@app.get("/api/pyq/pack")
+async def pyq_pack(subject_name: str = "", subject_code: str = "", regulation: str = ""):
+    pack = get_pyq_pack(subject_name=subject_name, subject_code=subject_code, regulation=regulation)
+    if not pack:
+        # Always return a usable fallback pack
+        q = " ".join(x for x in ["JNTUH", regulation, subject_code, subject_name, "previous year question paper PDF"] if x)
+        return {
+            "title": f"{subject_name or subject_code or 'Subject'} — PYQ pack",
+            "matched": False,
+            "links": [{"label": "Search PYQs", "url": f"https://www.google.com/search?q={quote(q)}", "type": "search"}],
+            "topics": [],
+        }
+    return {**pack, "matched": True}
+
+
+@app.get("/api/pyq/packs")
+async def pyq_packs():
+    return {"items": list_pyq_packs()}
+
+
+@app.post("/api/grace-marks")
+async def grace_marks_check(body: GraceMarksRequest):
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        THREAD_POOL,
+        lambda: check_grace_eligibility(body.subjects, body.regulation),
+    )
+
+
+@app.post("/api/share/create")
+async def create_share(body: ShareTokenRequest):
+    try:
+        token = create_share_token(body.data)
+    except ValueError as e:
+        raise HTTPException(status_code=413, detail=str(e))
+    return {"token": token}
+
+
+@app.get("/api/share/verify")
+async def verify_share(token: str):
+    data = verify_share_token(token)
+    if not data:
+        raise HTTPException(status_code=400, detail="Invalid or expired share token")
+    return {"data": data}
 
 
 # ==========================================

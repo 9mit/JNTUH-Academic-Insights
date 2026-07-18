@@ -1,227 +1,73 @@
-# JNTUH Academic Insights 🎓
+# JNTUH Academic Insights
 
-A powerful web application for JNTUH students to **track, analyze, and predict** their academic performance. Built with React + TypeScript frontend and a Python (FastAPI + Scikit-learn) backend.
+Unofficial academic companion for JNTUH students (CGPA, credits, backlog, notes, updates).  
+**Not affiliated with JNTUH.**
 
----
+**Live:** [https://jntuh-results.duckdns.org/](https://jntuh-results.duckdns.org/)
 
-## 🌟 What is This?
+## Quick start
 
-**JNTUH Academic Insights** is an academic companion designed for JNTUH university students. It aggregates results from multiple sources, calculates CGPA using the official formula, visualizes performance trends, and provides smart academic guidance.
-
-### The Problem It Solves
-- **Scattered Results** — JNTUH results are spread across multiple PDFs and web pages
-- **Manual Calculations** — Students manually calculate CGPA using spreadsheets
-- **No Insights** — Traditional methods don't reveal performance patterns
-- **Future Planning** — Hard to know what grades you need for your target CGPA
-
-### The Solution
-1. **Aggregates** all your results in one place
-2. **Calculates** SGPA/CGPA automatically using the official JNTUH formula: `Percentage = (CGPA − 0.5) × 10`
-3. **Visualizes** your performance with interactive charts and trends
-4. **Predicts** your next semester performance using ML (Linear Regression)
-5. **Planning Tools** — Target CGPA calculator, What-If simulator, Eligibility checker
-
-> ⚠️ **JNTUH Affiliated Colleges Only**
->
-> Auto-Fetch works **only for JNTUH and its affiliated colleges**. Autonomous college students can still use **PDF Upload** or **Manual Entry**.
-
----
-
-## ✨ Features
-
-### 📥 Import Your Results
-| Method | Description |
-|--------|-------------|
-| **Auto-Fetch** | Enter hall ticket number → all results fetched automatically |
-| **PDF Upload** | Upload JNTUH result memo PDFs for instant parsing |
-| **Manual Entry** | Enter SGPA for any semester manually |
-
-### 📊 Dashboard Analytics
-- **CGPA & Percentage** — Real-time calculation using official JNTUH formula
-- **SGPA Trend Line** — Visual performance trajectory over semesters
-- **Grade Distribution** — O/A+/A/B+/B/C/D breakdown pie chart
-- **Credits Progress** — Track credits earned vs total required
-- **Detailed Marks Display** — Internal, External, and Total marks for each subject in transcript and walkthrough
-- **Backlogs List** — Active backlogs with deduplication (cleared subjects excluded)
-
-### 🧠 Smart Insights
-- **Next SGPA Prediction** — ML predicts your likely next semester SGPA
-- **Performance Consistency Score** — How stable is your academic performance
-- **Trend Analysis** — Improving, declining, or stable
-- **Strength & Weakness Detection** — Best and worst subjects
-
-### 🧮 Planning Tools
-| Tool | What It Does |
-|------|-------------|
-| **Target CGPA Calculator** | Enter target CGPA → Get required SGPA for remaining semesters |
-| **What-If Calculator** | Simulate: "If I get O in Math, what's my new CGPA?" |
-| **Eligibility Checker** | Check CGPA against company placement cutoffs |
-| **Semester Goals** | Set target SGPA per semester and track progress |
-
-### 📜 Transcript & Export
-- **Printable Transcript** — JNTUH-style table format
-- **Export to Excel** — Download all data as `.xlsx`
-- **Shareable Link** — Generate a URL to share your results
-
-### 📚 Notes Hub
-- R18 and R22 CSE notes with subject-wise organization
-- Download PDF notes directly
-- Contribute your own notes (pending admin approval)
-
----
-
-## 🚀 Getting Started
-
-Follow these steps to get the project up and running on your local machine.
-
-### 📋 Prerequisites
-- **Node.js** (v18.0 or higher)
-- **Python** (v3.9 or higher)
-- **Git** (for cloning the repository)
-
-### 🛠️ Installation & Setup
-
-1. **Clone the Repository**
-   ```bash
-   git clone https://github.com/Naumit/JNTUH-Academic-Insights
-   cd JNTUH-Academic-Insights
-   ```
-
-2. **Frontend Setup**
-   Install the necessary Node modules:
-   ```bash
-   npm install
-   ```
-
-3. **Backend Setup**
-   It is recommended to use a virtual environment:
-   ```bash
-   # Create a virtual environment
-   python -m venv venv
-   # Activate it (Windows)
-   .\venv\Scripts\activate
-   # Activate it (Mac/Linux)
-   source venv/bin/activate
-
-   # Install Python dependencies
-   pip install -r requirements.txt
-   ```
-
-4. **Playwright Installation**
-   The application uses Playwright for auto-fetching results. Install the required browser binaries:
-   ```bash
-   playwright install chromium
-   ```
-
-### 🏃 Running the Application
-
-You will need two terminal windows open:
-
-**Terminal 1: Backend (FastAPI)**
 ```bash
-# Ensure your virtual environment is active
-uvicorn server:app --host 0.0.0.0 --port 8000 --reload
+# Frontend
+npm install
+npm run dev          # http://127.0.0.1:5173
+
+# Backend (separate terminal)
+pip install -r requirements.txt
+uvicorn server:app --host 127.0.0.1 --port 8000
 ```
 
-**Terminal 2: Frontend (Vite)**
-```bash
-npm run dev
+Open **http://127.0.0.1:5173** (not `:8000` for the UI in local dev).
+
+## Environment variables
+
+1. Copy `.env.example` → `.env` in the project root.
+2. Fill only what you need (see table below).
+3. Restart Vite after changing any `VITE_*` variable.
+4. For the API, set backend vars in the same `.env` **or** in your host’s dashboard (Render / Railway / VPS). On Windows PowerShell you can also:
+
+```powershell
+$env:JNTUH_RESULTS_API_KEY="your-key"
+$env:SHARE_TOKEN_SECRET="your-secret"
+uvicorn server:app --host 127.0.0.1 --port 8000
 ```
 
-### 🌐 Accessing the App
-Once both servers are running, open your browser and navigate to:
-- **Frontend UI**: [http://localhost:5173](http://localhost:5173)
-- **API Documentation**: [http://localhost:8000/docs](http://localhost:8000/docs) (Swagger UI)
+| Variable | Required? | Where to get it |
+|----------|-----------|-----------------|
+| `VITE_API_URL` | No (local) | Leave **empty** locally. Set to your API URL only if frontend and API are on different domains. |
+| `VITE_SUPABASE_URL` | Optional | [supabase.com](https://supabase.com) → your project → **Settings → API → Project URL** |
+| `VITE_SUPABASE_ANON_KEY` | Optional | Same page → **anon public** key. Run `supabase/migrations/001_rls_policies.sql` in the SQL editor. |
+| `JNTUH_RESULTS_API_KEY` | Prod yes | Key for `jntuhresults.dhethi.com` (unofficial). Local code already has a default. If auto-fetch fails, inspect Network on [jntuhconnect.dhethi.com](https://jntuhconnect.dhethi.com/) for `X-Api-Key`. **PDF upload works without this.** |
+| `SHARE_TOKEN_SECRET` | Prod yes | **You create it:** `openssl rand -hex 32` |
+| `CORS_ORIGINS` | Prod yes | Live site: `https://jntuh-results.duckdns.org` |
+| `ENVIRONMENT` | Prod | Set to `production` on deploy |
+| `RENDER_EXTERNAL_URL` | Optional | Live site: `https://jntuh-results.duckdns.org` |
 
----
+### Local minimum
 
+Most features work with an **empty** `.env`. Add Supabase only if you use cloud Notes Hub uploads.
 
-## 📁 Project Structure
+### Production checklist (VPS / duckdns)
 
-```
-JNTUH-Academic-Insights/
-├── backend/                 # Python API modules
-│   ├── analyzer.py          # ML predictions (Scikit-learn)
-│   └── data_processor.py    # PDF parsing & SGPA/CGPA calculations
-├── src/                     # React + TypeScript Frontend
-│   ├── api/client.ts        # API client with timeout handling
-│   ├── components/
-│   │   ├── charts/          # Recharts visualization components
-│   │   ├── motion/          # Framer Motion animation wrappers
-│   │   ├── Dashboard.tsx    # Main analytics dashboard
-│   │   ├── Predictions.tsx  # ML predictions & planning tools
-│   │   └── ...
-│   ├── constants/grading.ts # JNTUH grade points, credits per regulation
-│   ├── context/             # React context (AcademicProvider)
-│   ├── types/index.ts       # TypeScript types (Grade, Subject, Semester)
-│   └── utils/
-│       ├── calculations.ts  # SGPA/CGPA/backlog logic
-│       └── exportUtils.ts   # Excel export
-├── server.py                # FastAPI entry point (all endpoints)
-├── requirements.txt         # Python dependencies
-├── package.json             # Node dependencies
-├── vite.config.ts           # Vite build configuration
-└── index.html               # SPA entry point
-```
+On the host that serves [jntuh-results.duckdns.org](https://jntuh-results.duckdns.org/):
 
----
+1. `npm run build`
+2. Set in `.env` (or systemd/Docker env):
+   - `ENVIRONMENT=production`
+   - `CORS_ORIGINS=https://jntuh-results.duckdns.org`
+   - `SHARE_TOKEN_SECRET=<strong random hex>`
+   - `JNTUH_RESULTS_API_KEY=<dhethi key>`
+   - `RENDER_EXTERNAL_URL=https://jntuh-results.duckdns.org` (optional keep-alive)
+3. Serve with `uvicorn server:app` (serves `dist/` when present)
+4. `/docs` is disabled automatically in production
 
-## 📊 API Endpoints
+## Main features
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/` | Health check / Serve React app |
-| `POST` | `/fetch/htno` | Auto-fetch results by hall ticket number |
-| `POST` | `/analyze/pdf` | Parse uploaded PDF files |
-| `POST` | `/predict/sgpa` | ML prediction for next SGPA |
-| `POST` | `/analyze/advanced` | Consistency score & insights |
-| `GET` | `/notes/catalog` | Notes catalog |
-| `GET` | `/notes/download` | Download note PDF |
-| `POST` | `/notes/upload` | Upload notes |
+- Hall-ticket fetch / PDF upload / manual grades  
+- Dashboard, credit tracker, backlog + grace check  
+- Goal planner, transcript export, share links  
+- Study library, live updates (JNTU Fast Updates)
 
----
+## License
 
-## 📚 Tech Stack
-
-### Frontend
-| Library | Purpose |
-|---------|---------|
-| React 19 | UI framework |
-| TypeScript 5.9 | Type safety |
-| Tailwind CSS 4.1 | Utility-first styling |
-| Vite 7.2 | Build tool & dev server |
-| Recharts 3.6 | Data visualization |
-| Framer Motion 12 | Animations |
-| Lucide React | Icons |
-| react-hot-toast | Toast notifications |
-| xlsx | Excel export |
-
-### Backend
-| Library | Purpose |
-|---------|---------|
-| FastAPI | Async REST API framework |
-| Pandas + NumPy | Data processing |
-| Scikit-learn | ML predictions (LinearRegression) |
-| PDFPlumber | PDF text extraction |
-| Playwright + Selenium | Web scraping for auto-fetch |
-| BeautifulSoup4 | HTML parsing |
-| SSE-Starlette | Server-Sent Events streaming |
-
----
-
-## 🔒 Privacy
-
-- All data is processed **locally** — your browser and your backend
-- No data stored on any external server
-- No external API calls for predictions or analysis
-- Shareable links encode data in the URL (no server storage)
-
----
-
-## 📄 License
-
-MIT License — Feel free to use, modify, and distribute.
-
----
-
-Built with ❤️ for JNTUH students 🎓
+MIT

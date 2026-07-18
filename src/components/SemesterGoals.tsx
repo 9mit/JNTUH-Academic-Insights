@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import toast from 'react-hot-toast';
 import { useAcademic } from '../context/AcademicContext';
 import { getSemesterSGPA } from '../utils/calculations';
 import { getSemesterLabel } from '../constants/grading';
@@ -12,11 +13,28 @@ interface SemesterGoal {
     target: number;
 }
 
-const STORAGE_KEY = 'jntuh_semester_goals';
-
 export default function SemesterGoals() {
     const { data } = useAcademic();
-    const [goals, setGoals] = useState<SemesterGoal[]>([]);
+    const [prevSemestersLength, setPrevSemestersLength] = useState(data.semesters.length);
+    const [goals, setGoals] = useState<SemesterGoal[]>(() =>
+        data.semesters.map(sem => ({
+            semId: sem.id,
+            year: sem.year,
+            sem: sem.sem,
+            target: 8.0,
+        }))
+    );
+
+    if (data.semesters.length !== prevSemestersLength) {
+        setPrevSemestersLength(data.semesters.length);
+        setGoals(data.semesters.map(sem => ({
+            semId: sem.id,
+            year: sem.year,
+            sem: sem.sem,
+            target: 8.0,
+        })));
+    }
+
     const [saved, setSaved] = useState(false);
 
     const initializeDefaultGoals = () => {
@@ -29,25 +47,15 @@ export default function SemesterGoals() {
         setGoals(defaultGoals);
     };
 
-    // Initialize goals from localStorage or defaults
-    useEffect(() => {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-            try {
-                const parsed = JSON.parse(stored) as SemesterGoal[];
-                // Ensure all current semesters have a goal entry
-                const merged = data.semesters.map(sem => {
-                    const existing = parsed.find(g => g.semId === sem.id);
-                    return existing || { semId: sem.id, year: sem.year, sem: sem.sem, target: 8.0 };
-                });
-                setGoals(merged);
-            } catch {
-                initializeDefaultGoals();
-            }
-        } else {
-            initializeDefaultGoals();
-        }
-    }, [data.semesters.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    const saveGoals = () => {
+        setSaved(true);
+        toast.success('Goals saved for this session only (cleared on refresh)');
+        setTimeout(() => setSaved(false), 2000);
+    };
+
+    const resetGoals = () => {
+        initializeDefaultGoals();
+    };
 
     const updateGoal = (semId: string, target: number) => {
         setGoals(prev => prev.map(g =>
@@ -56,21 +64,10 @@ export default function SemesterGoals() {
         setSaved(false);
     };
 
-    const saveGoals = () => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(goals));
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
-    };
-
-    const resetGoals = () => {
-        initializeDefaultGoals();
-        localStorage.removeItem(STORAGE_KEY);
-    };
-
     // Calculate progress for each semester
     const progress = useMemo(() => {
         return data.semesters.map(sem => {
-            const actual = getSemesterSGPA(sem);
+            const actual = getSemesterSGPA(sem, data.regulation);
             const goal = goals.find(g => g.semId === sem.id);
             const target = goal?.target || 8.0;
 
@@ -89,7 +86,7 @@ export default function SemesterGoals() {
                 status,
             };
         });
-    }, [data.semesters, goals]);
+    }, [data.semesters, data.regulation, goals]);
 
     // Summary stats
     const stats = useMemo(() => {
@@ -175,8 +172,8 @@ export default function SemesterGoals() {
                 {progress.map((p) => (
                     <motion.div
                         key={p.semId}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
+                        initial={false}
+                        animate={{ opacity: 1 }}
                         className={`flex items-center justify-between p-3 rounded-xl border ${getStatusStyle(p.status)}`}
                     >
                         <div className="flex items-center gap-3">

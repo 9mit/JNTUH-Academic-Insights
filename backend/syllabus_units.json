@@ -1,0 +1,146 @@
+{
+  "units": {
+    "COMPILER DESIGN": {
+      "aliases": ["156AH", "COMPILER DESIGN"],
+      "focus_units": [
+        { "unit": 1, "title": "Lexical Analysis", "weight_hint": "high", "topics": ["Tokens", "Lexers", "Regular expressions", "NFA/DFA"] },
+        { "unit": 2, "title": "Syntax Analysis", "weight_hint": "high", "topics": ["CFG", "Parsing", "FIRST/FOLLOW", "LL/LR"] },
+        { "unit": 3, "title": "Semantic Analysis & IR", "weight_hint": "medium", "topics": ["SDT", "Type checking", "Three-address code"] },
+        { "unit": 4, "title": "Runtime & Code Gen", "weight_hint": "medium", "topics": ["Activation records", "Heap/stack", "Code generation"] },
+        { "unit": 5, "title": "Optimization", "weight_hint": "medium", "topics": ["Peephole", "Data-flow basics", "Optimization techniques"] }
+      ],
+      "study_tip": "Prioritize Units 1–2 (lexical + parsing) — highest PYQ density for JNTUH supply papers."
+    },
+    "SOFTWARE ENGINEERING": {
+      "aliases": ["155DB", "SOFTWARE ENGINEERING"],
+      "focus_units": [
+        { "unit": 1, "title": "Process Models", "weight_hint": "high", "topics": ["Waterfall", "Agile", "Spiral", "Prototyping"] },
+        { "unit": 2, "title": "Requirements", "weight_hint": "high", "topics": ["SRS", "Use cases", "Functional vs non-functional"] },
+        { "unit": 3, "title": "Design", "weight_hint": "medium", "topics": ["Architectural styles", "Coupling/cohesion", "UML"] },
+        { "unit": 4, "title": "Testing", "weight_hint": "high", "topics": ["Unit/integration", "Black/white box", "Test cases"] },
+        { "unit": 5, "title": "Metrics & Maintenance", "weight_hint": "medium", "topics": ["Quality metrics", "Risk", "Maintenance types"] }
+      ],
+      "study_tip": "Process models + testing appear in almost every supply paper — clear those first."
+    },
+    "COMPUTER NETWORKS": {
+      "aliases": ["155AN", "COMPUTER NETWORKS"],
+      "focus_units": [
+        { "unit": 1, "title": "Intro & Physical", "weight_hint": "medium", "topics": ["OSI/TCP-IP", "Media", "Switching"] },
+        { "unit": 2, "title": "Data Link", "weight_hint": "high", "topics": ["Framing", "CRC", "ARQ", "MAC"] },
+        { "unit": 3, "title": "Network Layer", "weight_hint": "high", "topics": ["IP", "Routing", "Subnetting", "ICMP"] },
+        { "unit": 4, "title": "Transport", "weight_hint": "high", "topics": ["UDP/TCP", "Congestion", "Flow control"] },
+        { "unit": 5, "title": "Application", "weight_hint": "medium", "topics": ["HTTP/DNS/SMTP", "Sockets"] }
+      ],
+      "study_tip": "Units 2–4 (link/network/transport) carry the heaviest exam weight."
+    },
+    "WEB TECHNOLOGIES": {
+      "aliases": ["155DN", "WEB TECHNOLOGIES"],
+      "focus_units": [
+        { "unit": 1, "title": "HTML/CSS/JS", "weight_hint": "high", "topics": ["DOM", "Forms", "Events", "CSS layout"] },
+        { "unit": 2, "title": "XML & Servlets", "weight_hint": "medium", "topics": ["XML/DTD", "Servlet lifecycle"] },
+        { "unit": 3, "title": "JSP", "weight_hint": "high", "topics": ["JSP tags", "Sessions", "Beans"] },
+        { "unit": 4, "title": "PHP & Databases", "weight_hint": "medium", "topics": ["PHP basics", "MySQL connectivity"] },
+        { "unit": 5, "title": "Client frameworks", "weight_hint": "medium", "topics": ["AJAX", "JSON", "Modern JS"] }
+      ],
+      "study_tip": "HTML/JS + JSP questions dominate — practice end-to-end form→server flows."
+    },
+    "MACHINE LEARNING": {
+      "aliases": ["156BN", "MACHINE LEARNING"],
+      "focus_units": [
+        { "unit": 1, "title": "ML Foundations", "weight_hint": "high", "topics": ["Supervised vs unsupervised", "Bias-variance"] },
+        { "unit": 2, "title": "Regression & Classification", "weight_hint": "high", "topics": ["Linear/logistic", "Decision trees", "k-NN"] },
+        { "unit": 3, "title": "Neural Nets", "weight_hint": "medium", "topics": ["Perceptron", "Backprop basics"] },
+        { "unit": 4, "title": "Clustering & Dimensionality", "weight_hint": "medium", "topics": ["k-means", "PCA"] },
+        { "unit": 5, "title": "Evaluation", "weight_hint": "high", "topics": ["Confusion matrix", "Precision/recall", "Cross-validation"] }
+      ],
+      "study_tip": "Definitions + algorithm steps + evaluation metrics are frequent supply targets."
+    },
+    "FORMAL LANGUAGES & AUTOMATA THEORY": {
+      "aliases": ["155BK", "FORMAL LANGUAGES", "AUTOMATA"],
+      "focus_units": [
+        { "unit": 1, "title": "Finite Automata", "weight_hint": "high", "topics": ["DFA/NFA", "Equivalence", "Minimization"] },
+        { "unit": 2, "title": "Regular Languages", "weight_hint": "high", "topics": ["Regex", "Pumping lemma", "Closure"] },
+        { "unit": 3, "title": "CFG & PDA", "weight_hint": "high", "topics": [" derivations", "Ambiguity", "PDA"] },
+        { "unit": 4, "title": "TM", "weight_hint": "medium", "topics": ["Turing machines", "Variants"] },
+        { "unit": 5, "title": "Undecidability", "weight_hint": "medium", "topics": ["Decidable languages", "Halting problem intro"] }
+      ],
+      "study_tip": "Construction problems (DFA/CFG/PDA) score easiest marks — drill conversions."
+    },
+    "DATA MINING": {
+      "aliases": ["157BC", "DATA MINING"],
+      "focus_units": [
+        { "unit": 1, "title": "Intro & Preprocessing", "weight_hint": "medium", "topics": ["KDD", "Cleaning", "Normalization"] },
+        { "unit": 2, "title": "Association Rules", "weight_hint": "high", "topics": ["Apriori", "FP-Growth", "Support/confidence"] },
+        { "unit": 3, "title": "Classification", "weight_hint": "high", "topics": ["Decision trees", "Bayes", "Accuracy"] },
+        { "unit": 4, "title": "Clustering", "weight_hint": "high", "topics": ["k-means", "Hierarchical", "DBSCAN intro"] },
+        { "unit": 5, "title": "Applications", "weight_hint": "medium", "topics": ["Web mining", "Outliers"] }
+      ],
+      "study_tip": "Apriori + classification/clustering algorithms are the highest-yield revision set."
+    },
+    "ARTIFICIAL INTELLIGENCE": {
+      "aliases": ["157AM", "ARTIFICIAL INTELLIGENCE"],
+      "focus_units": [
+        { "unit": 1, "title": "Intelligent Agents", "weight_hint": "medium", "topics": ["PEAS", "Environments"] },
+        { "unit": 2, "title": "Search", "weight_hint": "high", "topics": ["BFS/DFS", "A*", "Heuristics"] },
+        { "unit": 3, "title": "Knowledge & Reasoning", "weight_hint": "high", "topics": ["Propositional/FOL", "Inference"] },
+        { "unit": 4, "title": "Uncertainty", "weight_hint": "medium", "topics": ["Bayes", "Bayesian networks"] },
+        { "unit": 5, "title": "Learning & NLP intro", "weight_hint": "medium", "topics": ["Decision trees", "Basic NLP"] }
+      ],
+      "study_tip": "Search algorithms and logic proofs dominate — memorize pseudocode and properties."
+    },
+    "INTERNET OF THINGS": {
+      "aliases": ["157CD", "INTERNET OF THINGS", "IOT"],
+      "focus_units": [
+        { "unit": 1, "title": "IoT Concepts", "weight_hint": "high", "topics": ["Characteristics", "Architecture"] },
+        { "unit": 2, "title": "Sensors & Embedded", "weight_hint": "high", "topics": ["Sensors/actuators", "Arduino/RPi basics"] },
+        { "unit": 3, "title": "Connectivity", "weight_hint": "high", "topics": ["MQTT", "CoAP", "ZigBee/WiFi"] },
+        { "unit": 4, "title": "Cloud & Analytics", "weight_hint": "medium", "topics": ["IoT cloud platforms", "Data pipelines"] },
+        { "unit": 5, "title": "Security & Cases", "weight_hint": "medium", "topics": ["Threats", "Smart city/home cases"] }
+      ],
+      "study_tip": "Architecture layers + MQTT/protocols are frequent short-answer marks."
+    },
+    "COMPUTER ORIENTED STATISTICAL METHODS": {
+      "aliases": ["153AJ", "STATISTICAL METHODS", "STATISTICS"],
+      "focus_units": [
+        { "unit": 1, "title": "Probability", "weight_hint": "high", "topics": ["Bayes", "Random variables"] },
+        { "unit": 2, "title": "Distributions", "weight_hint": "high", "topics": ["Binomial", "Poisson", "Normal"] },
+        { "unit": 3, "title": "Sampling & Estimation", "weight_hint": "medium", "topics": ["CLT", "Point/interval estimates"] },
+        { "unit": 4, "title": "Hypothesis Testing", "weight_hint": "high", "topics": ["z/t tests", "Chi-square"] },
+        { "unit": 5, "title": "Correlation & Regression", "weight_hint": "medium", "topics": ["Pearson", "Linear regression"] }
+      ],
+      "study_tip": "Formula sheet + solved numericals for distributions and hypothesis tests."
+    },
+    "BUSINESS ECONOMICS & FINANCIAL ANALYSIS": {
+      "aliases": ["154AH", "BUSINESS ECONOMICS", "BEFA"],
+      "focus_units": [
+        { "unit": 1, "title": "Business Environment", "weight_hint": "medium", "topics": ["Forms of business", "Economy basics"] },
+        { "unit": 2, "title": "Demand & Production", "weight_hint": "high", "topics": ["Elasticity", "Cost curves"] },
+        { "unit": 3, "title": "Markets & Pricing", "weight_hint": "medium", "topics": ["Perfect/monopoly", "Pricing methods"] },
+        { "unit": 4, "title": "Accounting", "weight_hint": "high", "topics": ["Journal/ledger", "Final accounts"] },
+        { "unit": 5, "title": "Financial Analysis", "weight_hint": "high", "topics": ["Ratios", "Funds flow", "Capital budgeting"] }
+      ],
+      "study_tip": "Ratio analysis and accounting problems are the fastest scoring units."
+    },
+    "NON-CONVENTIONAL ENERGYSOURCES": {
+      "aliases": ["156DX", "NON-CONVENTIONAL", "ENERGY"],
+      "focus_units": [
+        { "unit": 1, "title": "Solar Energy", "weight_hint": "high", "topics": ["Collectors", "PV cells"] },
+        { "unit": 2, "title": "Wind Energy", "weight_hint": "high", "topics": ["Turbines", "Sites"] },
+        { "unit": 3, "title": "Bio & Geo", "weight_hint": "medium", "topics": ["Biomass", "Geothermal"] },
+        { "unit": 4, "title": "Ocean & Tidal", "weight_hint": "medium", "topics": ["OTEC", "Tidal plants"] },
+        { "unit": 5, "title": "Storage & Economy", "weight_hint": "medium", "topics": ["Energy storage", "Economics"] }
+      ],
+      "study_tip": "Solar + wind diagrams and comparisons are reliable long-answer material."
+    }
+  },
+  "default": {
+    "focus_units": [
+      { "unit": 1, "title": "Foundations", "weight_hint": "high", "topics": ["Core definitions", "Unit 1 syllabus outcomes"] },
+      { "unit": 2, "title": "Core techniques", "weight_hint": "high", "topics": ["Standard algorithms/methods"] },
+      { "unit": 3, "title": "Applications", "weight_hint": "medium", "topics": ["Worked examples", "Case problems"] },
+      { "unit": 4, "title": "Advanced topics", "weight_hint": "medium", "topics": ["Extensions", "Comparisons"] },
+      { "unit": 5, "title": "Revision set", "weight_hint": "high", "topics": ["Previous year patterns", "Important definitions"] }
+    ],
+    "study_tip": "Start with Units 1–2 definitions and 5 years of PYQs for this subject."
+  }
+}

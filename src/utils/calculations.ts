@@ -1,5 +1,11 @@
 import type { Subject, Semester, CalculationResult, CGPAResult, GradeDistribution, YearlyAverage, Regulation } from '../types';
 import { GRADE_POINTS, toPercentage, REGULATION_CREDITS } from '../constants/grading';
+import { getGradePointsForRegulation } from './regulationGrades';
+import { isNonCreditSubject } from './nonCreditSubjects';
+
+function gradePoints(grade: Subject['grade'], regulation?: Regulation): number {
+    return regulation ? getGradePointsForRegulation(grade, regulation) : (GRADE_POINTS[grade] ?? 0);
+}
 
 /**
  * Normalizes subject identifier to heavily reduce duplicate tracking issues.
@@ -31,7 +37,7 @@ export function isMeaningfulSubject(subject: Subject): boolean {
     return Number.isFinite(subject.credits) && subject.credits >= 0;
 }
 
-export function getBestSubjects(subjects: Subject[]): Subject[] {
+export function getBestSubjects(subjects: Subject[], regulation?: Regulation): Subject[] {
     const bestMap = new Map<string, Subject>();
 
     for (const subject of subjects) {
@@ -46,8 +52,8 @@ export function getBestSubjects(subjects: Subject[]): Subject[] {
             continue;
         }
 
-        const currGP = GRADE_POINTS[subject.grade] ?? 0;
-        const prevGP = GRADE_POINTS[existing.grade] ?? 0;
+        const currGP = gradePoints(subject.grade, regulation);
+        const prevGP = gradePoints(existing.grade, regulation);
         if (currGP > prevGP || (existing.grade === 'Ab' && subject.grade === 'F')) {
             bestMap.set(key, subject);
         }
@@ -67,12 +73,12 @@ export function hasSemesterData(semester: Semester): boolean {
 /**
  * Calculate SGPA for a set of subjects
  * Formula: Sum(credit * gradePoint) / Sum(credits)
- * Note: 0-credit subjects (mandatory courses) are excluded from calculation
+ * Note: non-credit / 0-credit subjects are excluded from calculation
  */
-export function calculateSGPA(subjects: Subject[]): CalculationResult {
+export function calculateSGPA(subjects: Subject[], regulation?: Regulation): CalculationResult {
     // Deduplicate to find best attempt for calculation (handles multiple attempts in same semester)
-    const bestSubjects = getBestSubjects(subjects);
-    const creditSubjects = bestSubjects.filter(s => s.credits > 0);
+    const bestSubjects = getBestSubjects(subjects, regulation);
+    const creditSubjects = bestSubjects.filter(s => !isNonCreditSubject(s) && s.credits > 0);
 
     if (creditSubjects.length === 0) {
         return { sgpa: 0, totalCredits: 0, earnedCredits: 0, lostCredits: 0 };
@@ -84,7 +90,7 @@ export function calculateSGPA(subjects: Subject[]): CalculationResult {
     let lostCredits = 0;
 
     for (const subject of creditSubjects) {
-        const gradePoint = GRADE_POINTS[subject.grade] ?? 0;
+        const gradePoint = gradePoints(subject.grade, regulation);
         totalCredits += subject.credits;
         totalGradePoints += subject.credits * gradePoint;
 
@@ -107,14 +113,14 @@ export function calculateSGPA(subjects: Subject[]): CalculationResult {
  * 2. Official SGPA from JNTUH website (if available)
  * 3. Calculated from subject data (fallback)
  */
-export function getSemesterSGPA(semester: Semester): number {
+export function getSemesterSGPA(semester: Semester, regulation?: Regulation): number {
     // Manual mode: user enters their SGPA
     if (semester.mode === 'manual') {
         return semester.manualSGPA ?? 0;
     }
 
     // Detailed mode: prefer official SGPA if available
-    const officialSubject = getBestSubjects(semester.subjects).find(
+    const officialSubject = getBestSubjects(semester.subjects, regulation).find(
         s => s.official_sem_sgpa !== undefined && s.official_sem_sgpa > 0
     );
     if (officialSubject?.official_sem_sgpa) {
@@ -122,26 +128,30 @@ export function getSemesterSGPA(semester: Semester): number {
     }
 
     // Fallback: calculate from subjects using scraped credits
-    return calculateSGPA(semester.subjects).sgpa;
+    return calculateSGPA(semester.subjects, regulation).sgpa;
 }
 
 /**
- * Get credits for a semester (from scraped subject data)
+ * Get credits for a semester.
+ * Prefer official API semesterCredits when present — subject rows can over-count
+ * (e.g. electives listed with credits that are not in the semester total).
  */
-export function getSemesterCredits(semester: Semester): number {
+export function getSemesterCredits(semester: Semester, regulation?: Regulation): number {
     if (semester.mode === 'manual') {
         return 20; // Standard for manual mode
     }
-    // Use actual scraped credits from subjects (excluding 0-credit courses)
-    return calculateSGPA(semester.subjects).totalCredits;
+    if (typeof semester.officialCredits === 'number' && semester.officialCredits > 0) {
+        return semester.officialCredits;
+    }
+    return calculateSGPA(semester.subjects, regulation).totalCredits;
 }
 
 /**
  * Calculate CGPA across all semesters
  * Formula: Sum(semesterCredits * semesterSGPA) / Sum(totalCredits)
  */
-export function calculateCGPA(semesters: Semester[]): CGPAResult {
-    const validSemesters = semesters.filter(sem => hasSemesterData(sem) && getSemesterCredits(sem) > 0);
+export function calculateCGPA(semesters: Semester[], regulation?: Regulation): CGPAResult {
+    const validSemesters = semesters.filter(sem => hasSemesterData(sem) && getSemesterCredits(sem, regulation) > 0);
 
     if (validSemesters.length === 0) {
         return { cgpa: 0, isWeighted: true, totalCredits: 0, percentage: 0 };
@@ -151,8 +161,8 @@ export function calculateCGPA(semesters: Semester[]): CGPAResult {
     let weightedSum = 0;
 
     for (const semester of validSemesters) {
-        const sgpa = getSemesterSGPA(semester);
-        const credits = getSemesterCredits(semester);
+        const sgpa = getSemesterSGPA(semester, regulation);
+        const credits = getSemesterCredits(semester, regulation);
 
         totalCredits += credits;
         weightedSum += sgpa * credits;
@@ -168,7 +178,7 @@ export function calculateCGPA(semesters: Semester[]): CGPAResult {
  * Check if a student is graduated based on their performance
  */
 export function isGraduated(semesters: Semester[], regulation: Regulation = 'R18'): boolean {
-    const { earned } = getCreditsStats(semesters);
+    const { earned } = getCreditsStats(semesters, regulation);
     const required = REGULATION_CREDITS[regulation] ?? 160;
     
     const allSemesters = semesters.length >= 8;
@@ -199,7 +209,7 @@ export function getGradeDistribution(semesters: Semester[]): GradeDistribution {
     for (const semester of semesters) {
         if (semester.mode === 'detailed') {
             for (const subject of getBestSubjects(semester.subjects)) {
-                if (subject.grade && subject.credits > 0) {
+                if (subject.grade && !isNonCreditSubject(subject) && subject.credits > 0) {
                     distribution[subject.grade]++;
                 }
             }
@@ -212,12 +222,12 @@ export function getGradeDistribution(semesters: Semester[]): GradeDistribution {
 /**
  * Get yearly averages
  */
-export function getYearlyAverages(semesters: Semester[]): YearlyAverage[] {
+export function getYearlyAverages(semesters: Semester[], regulation?: Regulation): YearlyAverage[] {
     const yearlyData: Record<number, { sum: number; credits: number; semesters: number }> = {};
 
     for (const semester of semesters) {
-        const sgpa = getSemesterSGPA(semester);
-        const credits = getSemesterCredits(semester);
+        const sgpa = getSemesterSGPA(semester, regulation);
+        const credits = getSemesterCredits(semester, regulation);
 
         if (hasSemesterData(semester) && credits > 0) {
             if (!yearlyData[semester.year]) {
@@ -245,9 +255,10 @@ export function calculateRequiredSGPA(
     semesters: Semester[],
     targetCGPA: number,
     remainingSemesters: number,
-    creditsPerSemester: number = 20
+    creditsPerSemester: number = 20,
+    regulation?: Regulation,
 ): number | null {
-    const currentResult = calculateCGPA(semesters);
+    const currentResult = calculateCGPA(semesters, regulation);
     const currentCredits = currentResult.totalCredits;
     const currentWeightedSum = currentResult.cgpa * currentCredits;
 
@@ -278,23 +289,60 @@ export function getPerformanceCategory(cgpa: number): string {
 }
 
 /**
- * Get credits statistics (earned and lost)
+ * Get credits statistics (earned and lost).
+ * When API semesterCredits are present, earned = official registered − lost (F/Ab).
+ * This matches JNTUH totals (e.g. R18 160) instead of inflated subject-row sums.
  */
-export function getCreditsStats(semesters: Semester[]): { earned: number; lost: number } {
+export function getCreditsStats(
+    semesters: Semester[],
+    regulation?: Regulation
+): { earned: number; lost: number } {
     let earned = 0;
     let lost = 0;
 
     for (const semester of semesters) {
         if (semester.mode === 'detailed') {
-            const result = calculateSGPA(semester.subjects);
-            earned += result.earnedCredits;
+            const result = calculateSGPA(semester.subjects, regulation);
             lost += result.lostCredits;
+            if (typeof semester.officialCredits === 'number' && semester.officialCredits > 0) {
+                earned += Math.max(0, semester.officialCredits - result.lostCredits);
+            } else {
+                earned += result.earnedCredits;
+            }
         } else if (semester.mode === 'manual' && (semester.manualSGPA ?? 0) > 0) {
             earned += 20; // Assume standard credits for manual mode
         }
     }
 
     return { earned, lost };
+}
+
+/** Earned credits for a single academic year (official semesterCredits when available) */
+export function getYearEarnedCredits(
+    semesters: Semester[],
+    year: number,
+    regulation?: Regulation
+): number {
+    return semesters
+        .filter((s) => s.year === year)
+        .reduce((sum, s) => {
+            if (!hasSemesterData(s)) return sum;
+            if (s.mode === 'manual') return sum + ((s.manualSGPA ?? 0) > 0 ? 20 : 0);
+            const result = calculateSGPA(s.subjects, regulation);
+            if (typeof s.officialCredits === 'number' && s.officialCredits > 0) {
+                return sum + Math.max(0, s.officialCredits - result.lostCredits);
+            }
+            return sum + result.earnedCredits;
+        }, 0);
+}
+
+/** Official registered credits for a year from API semesterCredits when present */
+export function getYearOfficialCredits(semesters: Semester[], year: number): number | null {
+    const yearSems = semesters.filter((s) => s.year === year && hasSemesterData(s));
+    if (yearSems.length === 0) return null;
+    const withOfficial = yearSems.filter((s) => typeof s.officialCredits === 'number' && s.officialCredits! > 0);
+    if (withOfficial.length === 0) return null;
+    return withOfficial.reduce((sum, s) => sum + (s.officialCredits || 0), 0);
 }
 
 /**
@@ -326,7 +374,7 @@ export function getBacklogs(semesters: Semester[]): BacklogInfo[] {
         if (semester.mode !== 'detailed') continue;
 
         for (const subject of semester.subjects) {
-            if (!isMeaningfulSubject(subject)) {
+            if (!isMeaningfulSubject(subject) || isNonCreditSubject(subject)) {
                 continue;
             }
             const key = getSubjectKey(subject);
@@ -352,14 +400,16 @@ export function getBacklogs(semesters: Semester[]): BacklogInfo[] {
         if (hasPassingAttempt) continue; // Cleared — not a current backlog.
 
         // Still a backlog — use the earliest failure for display.
+        // Prefer the highest known credit across attempts (API often sends 0 on F grades).
         const earliest = attempts[0];
+        const creditCandidate = Math.max(...attempts.map((a) => a.subject.credits || 0));
         backlogs.push({
             subjectName: earliest.subject.name,
             subjectCode: earliest.subject.code || '',
             year: earliest.year,
             sem: earliest.sem,
             grade: earliest.subject.grade,
-            credits: earliest.subject.credits,
+            credits: creditCandidate,
         });
     }
 

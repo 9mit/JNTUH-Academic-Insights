@@ -5,6 +5,18 @@ import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
+interface ContributedNote {
+    id?: string;
+    subject: string;
+    regulation: string;
+    file_name: string;
+    file_url: string;
+    file_size: number;
+    status?: string;
+    created_at?: string;
+}
+
 interface NoteFile {
     name: string;
     filename?: string;
@@ -64,6 +76,8 @@ export default function NotesHub() {
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const [focusSubject, setFocusSubject] = useState<string | null>(null);
+
     const fetchCatalog = useCallback(async () => {
         setLoading(true);
         setError(null);
@@ -80,7 +94,7 @@ export default function NotesHub() {
             }
 
             // 2. Fetch all approved notes from Supabase
-            let notes: any[] = [];
+            let notes: ContributedNote[] = [];
             try {
                 const { data, error: dbError } = await supabase
                     .from('notes')
@@ -89,8 +103,8 @@ export default function NotesHub() {
                     .order('created_at', { ascending: false });
 
                 if (dbError) throw dbError;
-                if (data) notes = data;
-            } catch (err: any) {
+                if (data) notes = data as ContributedNote[];
+            } catch (err) {
                 console.warn("Supabase fetch failed. Please check VITE_SUPABASE_URL in .env.", err);
                 // We don't throw here so the local catalog can still display if it existed, and the page doesn't crash.
             }
@@ -106,7 +120,7 @@ export default function NotesHub() {
 
                 if (!contributedReg.files) contributedReg.files = [];
 
-                notes.forEach((note: any) => {
+                notes.forEach((note: ContributedNote) => {
                     // Combine subject and regulation for better context in flat list
                     const displayName = `${note.subject} (${note.regulation})`;
 
@@ -135,15 +149,25 @@ export default function NotesHub() {
             builtCatalog.regulations.sort((a, b) => b.name.localeCompare(a.name));
 
             setCatalog(builtCatalog);
-        } catch (e: any) {
+        } catch (e) {
             console.error("Fetch catalog error:", e);
-            setError(e.message || 'Failed to load notes');
+            setError(e instanceof Error ? e.message : 'Failed to load notes');
         } finally {
             setLoading(false);
         }
     }, []);
 
     useEffect(() => { fetchCatalog(); }, [fetchCatalog]);
+
+    useEffect(() => {
+        try {
+            const focus = sessionStorage.getItem('notesFocusSubject');
+            if (focus) {
+                setFocusSubject(focus);
+                sessionStorage.removeItem('notesFocusSubject');
+            }
+        } catch { /* ignore */ }
+    }, []);
 
     const toggleExpand = (path: string) => {
         setExpandedPaths(prev => {
@@ -238,12 +262,13 @@ export default function NotesHub() {
             if (fileInputRef.current) fileInputRef.current.value = '';
 
             // Note: we don't need to rebuild catalog here because we just uploaded a pending document!
-        } catch (e: any) {
+        } catch (e) {
             console.error("Upload error:", e);
-            if (e?.message === 'Failed to fetch' || e?.toString().includes('fetch')) {
+            const err = e as { message?: string } | null;
+            if (err?.message === 'Failed to fetch' || String(e).includes('fetch')) {
                  toast.error('Database connection failed. Please add a valid VITE_SUPABASE_URL to your .env file.', { duration: 6000 });
             } else {
-                 toast.error(e.message || 'Upload failed');
+                 toast.error(err?.message || 'Upload failed');
             }
         } finally {
             setIsUploading(false);
@@ -275,9 +300,7 @@ export default function NotesHub() {
     return (
         <div className="space-y-6 select-none">
             {/* Header */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+            <div
                 className="text-center mb-4"
             >
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 mb-4">
@@ -287,13 +310,39 @@ export default function NotesHub() {
                 <p className="text-text-muted max-w-xl mx-auto">
                     Access and download notes organized by your semester needs
                 </p>
-            </motion.div>
+            </div>
+
+            {focusSubject && (
+                <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-amber-400 uppercase tracking-wider">Backlog focus</p>
+                        <p className="text-sm text-white font-semibold truncate">{focusSubject}</p>
+                        <p className="text-xs text-text-muted mt-1">Browse notes below, or search PYQs for this subject.</p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                        <button
+                            type="button"
+                            className="btn-secondary text-xs py-2 px-3"
+                            onClick={() => {
+                                const q = encodeURIComponent(`JNTUH ${focusSubject} previous year question paper PYQ PDF`);
+                                window.open(`https://www.google.com/search?q=${q}`, '_blank', 'noopener,noreferrer');
+                            }}
+                        >
+                            Find PYQs
+                        </button>
+                        <button
+                            type="button"
+                            className="btn-secondary text-xs py-2 px-3"
+                            onClick={() => setFocusSubject(null)}
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Contribute Notes Section */}
-            <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
+            <div
                 className="bg-gradient-to-br from-emerald-500/10 via-bg-card to-bg-card rounded-3xl border border-emerald-500/20 overflow-hidden"
             >
                 <button
@@ -484,7 +533,7 @@ export default function NotesHub() {
                         </motion.div>
                     )}
                 </AnimatePresence>
-            </motion.div>
+            </div>
 
             {/* Regulations */}
             {(!catalog || catalog.regulations.length === 0) ? (
@@ -495,10 +544,8 @@ export default function NotesHub() {
                 </div>
             ) : (
                 catalog.regulations.map((reg) => (
-                    <motion.div
+                    <div
                         key={reg.name}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
                         className="bg-bg-card border border-white/5 rounded-3xl overflow-hidden"
                     >
                         {/* Regulation Header */}
@@ -638,7 +685,7 @@ export default function NotesHub() {
                                 </motion.div>
                             )}
                         </AnimatePresence>
-                    </motion.div>
+                    </div>
                 )))}
 
             {/* Privacy Notice */}

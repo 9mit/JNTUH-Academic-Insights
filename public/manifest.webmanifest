@@ -1,0 +1,10 @@
+{
+  "name": "JNTUH Academic Insights",
+  "short_name": "JNTUH OS",
+  "description": "JNTUH student academic operating system",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#060b16",
+  "theme_color": "#060b16",
+  "icons": [{ "src": "/vite.svg", "sizes": "192x192", "type": "image/svg+xml" }]
+}

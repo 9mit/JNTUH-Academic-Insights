@@ -18,23 +18,38 @@ import {
     BarChart,
     Calculator,
 } from 'lucide-react';
+import SectionHeader from './ui/SectionHeader';
+
+interface TargetCGPAResult {
+    required: number;
+    achievable: boolean;
+    message: string;
+}
+
+interface PredictionData {
+    prediction?: number | null;
+    predicted_sgpa?: number | null;
+    confidence?: number | null;
+    trend?: string | null;
+    insights?: string[];
+}
 
 export default function Predictions() {
     const { data } = useAcademic();
-    const [apiPrediction, setApiPrediction] = useState<any>(null);
+    const [apiPrediction, setApiPrediction] = useState<PredictionData | null>(null);
     const [targetCGPA, setTargetCGPA] = useState<number>(8.5);
     const [remainingSemesters, setRemainingSemesters] = useState<number>(1);
-    const [targetResult, setTargetResult] = useState<any>(null);
+    const [targetResult, setTargetResult] = useState<TargetCGPAResult | null>(null);
 
     const sgpaData = useMemo(() =>
-        data.semesters.filter(sem => getSemesterSGPA(sem) > 0),
-        [data.semesters]
+        data.semesters.filter(sem => getSemesterSGPA(sem, data.regulation) > 0),
+        [data.semesters, data.regulation]
     );
 
     // Check if student has completed all 8 semesters (graduated)
     const isGraduated = sgpaData.length >= 8;
 
-    const insights = generateHeuristicInsights(data.semesters);
+    const insights = generateHeuristicInsights(data.semesters, data.regulation);
 
     // Fetch API prediction only for non-graduated students
     useEffect(() => {
@@ -44,7 +59,7 @@ export default function Predictions() {
             const semesterHistory = sgpaData.map(sem => ({
                 year: sem.year,
                 sem: sem.sem,
-                sgpa: getSemesterSGPA(sem)
+                sgpa: getSemesterSGPA(sem, data.regulation)
             })).filter(s => s.sgpa > 0);
 
             try {
@@ -56,11 +71,11 @@ export default function Predictions() {
         };
 
         fetchPrediction();
-    }, [sgpaData, isGraduated]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [sgpaData, isGraduated, data.regulation]);
 
     // Calculate target when inputs change
     const handleCalculateTarget = () => {
-        const result = getRequiredSGPAForTarget(data.semesters, targetCGPA, remainingSemesters);
+        const result = getRequiredSGPAForTarget(data.semesters, targetCGPA, remainingSemesters, 20, data.regulation);
         setTargetResult(result);
     };
 
@@ -88,6 +103,12 @@ export default function Predictions() {
 
     return (
         <div className="space-y-6">
+            <SectionHeader
+                icon={Brain}
+                title="Goal planner"
+                subtitle={isGraduated ? 'Degree complete — review insights and eligibility' : 'Targets, predictions, and semester planning'}
+            />
+
             {/* ML Prediction Card - Only for non-graduated students */}
             {apiPrediction && !isGraduated && (
                 <div className="bg-gradient-to-br from-primary/10 to-bg-card rounded-3xl p-6 border border-primary/20">
@@ -113,7 +134,11 @@ export default function Predictions() {
                         <div className="bg-black/20 rounded-2xl p-4 border border-white/5">
                             <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1">Confidence</p>
                             <p className="text-3xl font-black text-white">
-                                {apiPrediction.confidence ? `${(apiPrediction.confidence * 100).toFixed(0)}%` : '85%'}
+                                {apiPrediction.confidence != null
+                                    ? `${(apiPrediction.confidence * 100).toFixed(0)}%`
+                                    : apiPrediction.prediction != null
+                                        ? '—'
+                                        : '—'}
                             </p>
                         </div>
                         <div className="bg-black/20 rounded-2xl p-4 border border-white/5">

@@ -12,8 +12,8 @@ interface SemesterCardProps {
 }
 
 export default function SemesterCard({ semester }: SemesterCardProps) {
-    const { toggleSemesterExpand, setSemesterMode } = useAcademic();
-    const sgpa = getSemesterSGPA(semester);
+    const { toggleSemesterExpand, setSemesterMode, data } = useAcademic();
+    const sgpa = getSemesterSGPA(semester, data.regulation);
 
     // Determine status
     const hasData = hasSemesterData(semester);

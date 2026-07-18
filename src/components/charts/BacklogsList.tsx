@@ -2,7 +2,6 @@ import { useAcademic } from '../../context/AcademicContext';
 import { getBacklogs } from '../../utils/calculations';
 import { getSemesterLabel } from '../../constants/grading';
 import { AlertTriangle, BookX } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 export default function BacklogsList() {
     const { data } = useAcademic();
@@ -10,9 +9,7 @@ export default function BacklogsList() {
 
     if (backlogs.length === 0) {
         return (
-            <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+            <div
                 className="bg-gradient-to-br from-emerald-500/10 to-bg-card rounded-3xl p-6 border border-emerald-500/20 text-center"
             >
                 <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-500/20 flex items-center justify-center mb-4">
@@ -20,16 +17,14 @@ export default function BacklogsList() {
                 </div>
                 <h4 className="text-lg font-bold text-white mb-1">No Backlogs!</h4>
                 <p className="text-sm text-text-muted">You have cleared all your subjects. Great job! 🎉</p>
-            </motion.div>
+            </div>
         );
     }
 
     const totalLostCredits = backlogs.reduce((sum, b) => sum + b.credits, 0);
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
+        <div
             className="bg-gradient-to-br from-rose-500/10 to-bg-card rounded-3xl p-6 border border-rose-500/20"
         >
             {/* Header */}
@@ -101,6 +96,6 @@ export default function BacklogsList() {
                     💡 Clear these {backlogs.length} subject(s) to earn <span className="font-bold">{totalLostCredits} credits</span> and complete your degree.
                 </p>
             </div>
-        </motion.div>
+        </div>
     );
 }

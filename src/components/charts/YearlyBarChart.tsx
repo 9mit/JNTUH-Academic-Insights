@@ -11,11 +11,11 @@ import {
 import { useAcademic } from '../../context/AcademicContext';
 import { getYearlyAverages } from '../../utils/calculations';
 
-const COLORS = ['#38bdf8', '#22d3ee', '#a78bfa', '#4ade80'];
+const COLORS = ['#2563eb', '#c41e3a', '#f97316', '#22c55e'];
 
 export default function YearlyBarChart() {
     const { data } = useAcademic();
-    const yearlyData = getYearlyAverages(data.semesters);
+    const yearlyData = getYearlyAverages(data.semesters, data.regulation);
 
     const chartData = yearlyData.map(item => ({
         name: `Year ${item.year}`,

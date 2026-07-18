@@ -1,7 +1,6 @@
 import { GraduationCap, AlertTriangle, BookOpen } from 'lucide-react';
 import { useAcademic } from '../context/AcademicContext';
 import { getStudentStatus, getStatusLabel } from '../utils/calculations';
-import { motion } from 'framer-motion';
 
 export default function StudentStatusCard() {
     const { data } = useAcademic();
@@ -42,10 +41,7 @@ export default function StudentStatusCard() {
     const Icon = config.icon;
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+        <div
             className={`bg-gradient-to-br ${config.bgColor} rounded-3xl p-6 border ${config.borderColor} relative overflow-hidden`}
         >
             <div className={`absolute top-0 right-0 w-40 h-40 ${config.accentColor}/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2`} />
@@ -67,6 +63,6 @@ export default function StudentStatusCard() {
                     </p>
                 </div>
             </div>
-        </motion.div>
+        </div>
     );
 }

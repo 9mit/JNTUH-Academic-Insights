@@ -18,7 +18,7 @@ export default function SGPATrendLine() {
     const chartData = data.semesters
         .map(sem => ({
             name: getSemesterShortLabel(sem.year, sem.sem),
-            sgpa: getSemesterSGPA(sem),
+            sgpa: getSemesterSGPA(sem, data.regulation),
             year: sem.year,
             sem: sem.sem,
         }))
@@ -49,8 +49,8 @@ export default function SGPATrendLine() {
                     <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                         <defs>
                             <linearGradient id="sgpaGradient" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.4} />
-                                <stop offset="95%" stopColor="#38bdf8" stopOpacity={0} />
+                                <stop offset="5%" stopColor="#2563eb" stopOpacity={0.45} />
+                                <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
                             </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -67,29 +67,29 @@ export default function SGPATrendLine() {
                         />
                         <Tooltip
                             contentStyle={{
-                                backgroundColor: '#1e293b',
-                                border: '1px solid #38bdf8',
+                                backgroundColor: '#0a0a0a',
+                                border: '1px solid #2563eb',
                                 borderRadius: '8px',
-                                boxShadow: '0 0 20px rgba(56, 189, 248, 0.3)',
+                                boxShadow: '0 0 20px rgba(37, 99, 235, 0.25)',
                             }}
                             labelStyle={{ color: '#e2e8f0' }}
-                            itemStyle={{ color: '#38bdf8' }}
+                            itemStyle={{ color: '#60a5fa' }}
                             formatter={(value: number | undefined) => [value !== undefined ? value.toFixed(2) : '—', 'SGPA']}
                         />
                         <Area
                             type="monotone"
                             dataKey="sgpa"
-                            stroke="#38bdf8"
+                            stroke="#2563eb"
                             strokeWidth={3}
                             fill="url(#sgpaGradient)"
                         />
                         <Line
                             type="monotone"
                             dataKey="sgpa"
-                            stroke="#38bdf8"
+                            stroke="#2563eb"
                             strokeWidth={3}
-                            dot={{ fill: '#38bdf8', strokeWidth: 2, r: 5 }}
-                            activeDot={{ r: 8, fill: '#22d3ee', stroke: '#38bdf8', strokeWidth: 2 }}
+                            dot={{ fill: '#2563eb', strokeWidth: 2, r: 5 }}
+                            activeDot={{ r: 8, fill: '#c41e3a', stroke: '#2563eb', strokeWidth: 2 }}
                         />
                     </AreaChart>
                 </ResponsiveContainer>

@@ -1,4 +1,4 @@
-import type { Semester } from '../types';
+import type { Regulation, Semester } from '../types';
 import { getSemesterSGPA } from './calculations';
 
 interface HeuristicInsight {
@@ -43,11 +43,11 @@ function calculateVolatility(data: number[]): number {
 /**
  * Generate heuristic insights from SGPA data
  */
-export function generateHeuristicInsights(semesters: Semester[]): HeuristicInsight[] {
+export function generateHeuristicInsights(semesters: Semester[], regulation?: Regulation): HeuristicInsight[] {
     const insights: HeuristicInsight[] = [];
 
     const sgpaData = semesters
-        .map(sem => getSemesterSGPA(sem))
+        .map(sem => getSemesterSGPA(sem, regulation))
         .filter(sgpa => sgpa > 0);
 
     if (sgpaData.length < 2) {
@@ -163,12 +163,13 @@ export function getRequiredSGPAForTarget(
     semesters: Semester[],
     targetCGPA: number,
     remainingSemesters: number = 1,
-    creditsPerSemester: number = 20
+    creditsPerSemester: number = 20,
+    regulation?: Regulation,
 ): { required: number; achievable: boolean; message: string } | null {
     if (targetCGPA < 0 || targetCGPA > 10) return null;
     if (remainingSemesters < 1) return null;
 
-    const sgpaData = semesters.filter(sem => getSemesterSGPA(sem) > 0);
+    const sgpaData = semesters.filter(sem => getSemesterSGPA(sem, regulation) > 0);
 
     if (sgpaData.length === 0) {
         return {
@@ -183,7 +184,7 @@ export function getRequiredSGPAForTarget(
     let currentCredits = 0;
 
     for (const sem of sgpaData) {
-        const sgpa = getSemesterSGPA(sem);
+        const sgpa = getSemesterSGPA(sem, regulation);
         const credits = sem.mode === 'manual' ? 20 : sem.subjects.reduce((sum, s) => sum + s.credits, 0);
         currentSum += sgpa * credits;
         currentCredits += credits;

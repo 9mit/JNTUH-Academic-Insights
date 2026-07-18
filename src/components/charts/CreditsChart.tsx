@@ -12,8 +12,8 @@ import type { Regulation } from '../../types';
 
 export default function CreditsChart() {
     const { data } = useAcademic();
-    const { earned, lost } = getCreditsStats(data.semesters);
     const regulation = data.regulation as Regulation;
+    const { earned, lost } = getCreditsStats(data.semesters, regulation);
 
     // Get total required credits for this regulation (defaults to 160)
     const requiredCredits = REGULATION_CREDITS[regulation] || 160;
@@ -50,7 +50,7 @@ export default function CreditsChart() {
                     />
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                    <span className="text-white font-bold">{earned} <span className="text-text-muted font-normal">/ {requiredCredits} Credits</span></span>
+                    <span className="text-white font-bold">{earned} <span className="text-text-muted font-normal">earned · min {requiredCredits}</span></span>
                     <span className={`font-bold ${progressPercent >= 100 ? 'text-emerald-400' : 'text-amber-400'}`}>
                         {progressPercent.toFixed(0)}%
                     </span>

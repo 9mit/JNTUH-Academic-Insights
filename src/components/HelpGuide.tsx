@@ -16,9 +16,9 @@ import {
 } from 'lucide-react';
 
 const fadeIn = {
-    initial: { opacity: 0, y: 20 },
-    animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.4 }
+    initial: false as const,
+    animate: { y: 0 },
+    transition: { duration: 0.2 }
 };
 
 const steps = [
@@ -110,12 +110,11 @@ export default function HelpGuide() {
 
             {/* Steps */}
             <div className="space-y-6">
-                {steps.map((step, index) => (
+                {steps.map((step) => (
                     <motion.div
                         key={step.number}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.1 }}
+                        initial={false}
+                        animate={{ opacity: 1 }}
                         className="bg-bg-card border border-white/5 rounded-3xl p-6 relative"
                     >
                         {/* Step Number Badge - Inside box, top right */}
@@ -195,7 +194,7 @@ export default function HelpGuide() {
                 transition={{ delay: 0.6 }}
                 className="text-center text-xs text-text-muted py-4"
             >
-                🔒 <strong>Privacy:</strong> All data is processed locally. Nothing is sent to third-party servers.
+                🔒 <strong>Privacy:</strong> Grades stay in your browser by default and clear when you leave — unless you opt into the encrypted PIN vault on Import Results. Hall-ticket fetch goes through our API; export, share links, and CGPA cards are optional.
             </motion.div>
         </div>
     );

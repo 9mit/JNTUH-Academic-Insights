@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { Semester } from '../types';
+import type { Regulation, Semester } from '../types';
 import { getSemesterSGPA, calculateCGPA } from './calculations';
 import { getSemesterLabel } from '../constants/grading';
 
@@ -42,7 +42,7 @@ export function exportToExcel(data: ExportData): void {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const semestersData: any[] = [];
     data.semesters.forEach(sem => {
-        const sgpa = getSemesterSGPA(sem);
+        const sgpa = getSemesterSGPA(sem, data.regulation as Regulation);
         if (sgpa > 0) {
             semestersData.push({
                 'Semester': getSemesterLabel(sem.year, sem.sem),
@@ -58,7 +58,7 @@ export function exportToExcel(data: ExportData): void {
     }
 
     // 3. Summary Sheet
-    const cgpaResult = calculateCGPA(data.semesters);
+    const cgpaResult = calculateCGPA(data.semesters, data.regulation as Regulation);
     const summaryData = [
         { 'Field': 'Student Name', 'Value': data.studentName || '-' },
         { 'Field': 'Hall Ticket', 'Value': data.hallTicket || '-' },
@@ -142,12 +142,45 @@ export function decodeShareableData(encoded: string): ExportData | null {
 }
 
 /**
- * Generate shareable URL
+ * Generate shareable URL with signed token (preferred) or legacy base64 fallback
  */
-export function generateShareableUrl(data: ExportData): string {
-    const encoded = encodeShareableData(data);
+export async function generateShareableUrl(data: ExportData): Promise<string> {
+    const API_BASE = import.meta.env.VITE_API_URL || '';
     const baseUrl = window.location.origin + window.location.pathname;
+
+    try {
+        const res = await fetch(`${API_BASE}/api/share/create`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data }),
+        });
+        if (res.ok) {
+            const { token } = await res.json();
+            return `${baseUrl}?token=${encodeURIComponent(token)}`;
+        }
+    } catch {
+        // fallback to legacy encoding
+    }
+
+    const encoded = encodeShareableData(data);
     return `${baseUrl}?share=${encoded}`;
+}
+
+/**
+ * Decode signed share token via API
+ */
+export async function decodeShareToken(token: string): Promise<ExportData | null> {
+    const API_BASE = import.meta.env.VITE_API_URL || '';
+    try {
+        const res = await fetch(`${API_BASE}/api/share/verify?token=${encodeURIComponent(token)}`);
+        if (res.ok) {
+            const { data } = await res.json();
+            return data as ExportData;
+        }
+    } catch {
+        return null;
+    }
+    return null;
 }
 
 /**

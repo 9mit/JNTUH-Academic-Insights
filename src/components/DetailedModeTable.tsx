@@ -1,7 +1,8 @@
 import { Trash2, PlusCircle, LayoutGrid, Info } from 'lucide-react';
 import type { Subject, Grade } from '../types';
 import { useAcademic } from '../context/AcademicContext';
-import { GRADES } from '../constants/grading';
+import { getValidGradesForRegulation } from '../utils/regulationGrades';
+import { useMemo } from 'react';
 
 interface DetailedModeTableProps {
     semester: {
@@ -11,7 +12,11 @@ interface DetailedModeTableProps {
 }
 
 export default function DetailedModeTable({ semester }: DetailedModeTableProps) {
-    const { addSubject, updateSubject, removeSubject } = useAcademic();
+    const { addSubject, updateSubject, removeSubject, data } = useAcademic();
+    const grades = useMemo(
+        () => getValidGradesForRegulation(data.regulation).filter(g => g !== '-') as Grade[],
+        [data.regulation],
+    );
 
     return (
         <div className="space-y-4">
@@ -19,7 +24,7 @@ export default function DetailedModeTable({ semester }: DetailedModeTableProps) 
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm border-collapse">
                         <thead>
-                            <tr className="border-b border-border text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                            <tr className="border-b border-border bg-white/[0.03] text-[10px] font-bold text-text-secondary uppercase tracking-widest">
                                 <th className="px-3 py-3">Subject Name</th>
                                 <th className="px-3 py-3 text-center w-16">Int</th>
                                 <th className="px-3 py-3 text-center w-16">Ext</th>
@@ -35,7 +40,7 @@ export default function DetailedModeTable({ semester }: DetailedModeTableProps) 
                                     <td className="px-3 py-4">
                                         <div className="font-semibold text-text-primary">
                                             {subject.name}
-                                            {subject.credits === 0 && (
+                                            {subject.nonCredit && (
                                                 <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20">
                                                     Non-Credit
                                                 </span>
@@ -57,7 +62,7 @@ export default function DetailedModeTable({ semester }: DetailedModeTableProps) 
                                             onChange={(e) => updateSubject(semester.id, subject.id, { grade: e.target.value as Grade })}
                                             className="bg-bg-primary border border-border rounded-lg px-2 py-1.5 focus:border-primary focus:ring-1 focus:ring-primary/20 w-full font-bold text-center text-xs"
                                         >
-                                            {GRADES.map(g => (
+                                            {grades.map(g => (
                                                 <option key={g} value={g}>{g}</option>
                                             ))}
                                         </select>
