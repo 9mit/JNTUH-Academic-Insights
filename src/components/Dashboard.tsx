@@ -80,6 +80,45 @@ export default function Dashboard() {
                 </div>
             </div>
 
+            {data.resolutionAudit && data.resolutionAudit.length > 0 && (
+                <div className="card p-5 border border-white/10 bg-white/[0.02] rounded-2xl relative overflow-hidden space-y-3">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        <div className="flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-primary shrink-0" />
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-white font-heading">
+                                Dynamic Result Resolution Journey
+                            </h4>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                            {data.resolutionAudit.map((item, idx) => (
+                                <span
+                                    key={idx}
+                                    className={`text-[11px] font-mono font-semibold px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+                                        item.status === 'FOUND'
+                                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                                            : item.status === 'SOURCE_ERROR'
+                                            ? 'bg-red-500/15 border-red-500/30 text-red-400'
+                                            : 'bg-white/5 border-white/10 text-text-muted'
+                                    }`}
+                                    title={item.status === 'FOUND' ? `${item.semesters_found} semesters found` : 'Checked — No records in upstream feed'}
+                                >
+                                    <span>{item.regulation}</span>
+                                    <span className="text-[9px] opacity-75">
+                                        {item.status === 'FOUND' ? `(${item.semesters_found} sems)` : '✓ checked'}
+                                    </span>
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                    {data.semesters.filter(hasSemesterData).length < 8 && (
+                        <p className="text-xs text-text-muted leading-relaxed">
+                            <strong className="text-amber-400 font-semibold">Incomplete Academic Record ({data.semesters.filter(hasSemesterData).length}/8 semesters):</strong>{' '}
+                            The system detected an incomplete record (detained / missing 3-2 to 4-2) and dynamically traversed adjacent regulations ({data.searchPath?.join(' → ') || 'R22, R24'}) for continued exams. If this student has re-appeared or written exams under R22, upload their provisional memo PDF(s) to automatically merge them into this record.
+                        </p>
+                    )}
+                </div>
+            )}
+
             <StudentStatusCard />
 
             <div className="grid grid-cols-12 gap-6">

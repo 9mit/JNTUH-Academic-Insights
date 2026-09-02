@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useAcademic } from '../context/AcademicContext';
-import type { Regulation, Grade, Subject } from '../types';
+import type { Regulation, Grade, Subject, Semester } from '../types';
 import { generateId } from '../constants/grading';
 import { uploadPDFs, fetchByHallTicket } from '../api/client';
 import { normalizeNonCreditSubject } from '../utils/nonCreditSubjects';
@@ -125,7 +125,13 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
         officialCGPA?: number,
         detectedRegulation?: Regulation,
         regulationsSeen?: string[],
-        fetchMeta?: { academic_semesters?: number; all_semesters?: number; hard_refresh?: boolean }
+        fetchMeta?: { academic_semesters?: number; all_semesters?: number; hard_refresh?: boolean },
+        extraAudit?: {
+            resolution_audit?: any[];
+            search_path?: string[];
+            is_consolidated?: boolean;
+            student_status?: 'active' | 'detained' | 'graduated' | 'incomplete';
+        }
     ) => {
         const semesterMap: { [key: string]: Subject[] } = {};
         let hasAnyFail = false;
@@ -183,10 +189,14 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                 semSubjects[0].official_sem_sgpa = backendSem.sgpa;
             }
 
-            const officialCredits =
-                typeof backendSem?.credits === 'number' && backendSem.credits > 0
-                    ? backendSem.credits
-                    : undefined;
+            let officialCredits: number | undefined;
+            if (typeof backendSem?.credits === 'number' && backendSem.credits > 0) {
+                officialCredits = backendSem.credits;
+            } else if (semSubjects.length > 0) {
+                officialCredits = semSubjects
+                    .filter((s) => !s.nonCredit && s.grade !== 'F' && s.grade !== 'Ab')
+                    .reduce((acc, s) => acc + s.credits, 0);
+            }
 
             const regCounts = new Map<string, number>();
             for (const s of semSubjects) {
@@ -229,11 +239,16 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
             }
 
             replaceFromImport({
-                semesters: semestersToImport,
+                semesters: semestersToImport as Semester[],
                 studentName: studentName || '',
                 hallTicket: htno || '',
                 regulation,
                 officialCGPA,
+                studentStatus: extraAudit?.student_status,
+                isConsolidated: extraAudit?.is_consolidated,
+                regulationsSeen: regulationsSeen,
+                resolutionAudit: extraAudit?.resolution_audit,
+                searchPath: extraAudit?.search_path,
             });
 
             const seen = (regulationsSeen || []).filter(Boolean);
@@ -363,7 +378,13 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                     response.regulations_seen as string[] | undefined,
                     response.fetch_meta as
                         | { academic_semesters?: number; all_semesters?: number; hard_refresh?: boolean }
-                        | undefined
+                        | undefined,
+                    {
+                        resolution_audit: (response as any).resolution_audit,
+                        search_path: (response as any).search_path,
+                        is_consolidated: (response as any).is_consolidated,
+                        student_status: (response as any).student_status,
+                    }
                 );
                 toast.dismiss(toastId);
                 toast.success(`Welcome, ${response.student_name || response.htno}!`);

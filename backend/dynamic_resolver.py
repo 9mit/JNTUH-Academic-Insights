@@ -253,10 +253,13 @@ class DynamicRegulationResolver:
         out = merged.to_dict()
         out["selected_regulation"] = start_reg
         out["resolution_audit"] = resolution_audit
+        out["search_path"] = search_path
+        out["is_consolidated"] = len(merged.regulations_seen) > 1
         if partial_errors:
             out["partial_errors"] = partial_errors
         out["meta"]["search_path"] = search_path
-        out["meta"]["is_consolidated"] = len(merged.regulations_seen) > 1 or len(discovered_results) > 1
+        out["meta"]["is_consolidated"] = len(merged.regulations_seen) > 1
+        out["meta"]["resolution_audit"] = resolution_audit
 
         return out
 

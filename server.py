@@ -747,6 +747,53 @@ async def get_available_regulations():
     }
 
 
+def filter_student_result_by_regulation(raw: Dict[str, Any], target_reg: str) -> Optional[Dict[str, Any]]:
+    """
+    Partition raw student results to only include subjects/semesters matching target_reg.
+    Returns None if the student has no academic records under target_reg.
+    """
+    target = (target_reg or "").strip().upper()
+    if not target:
+        return raw
+
+    all_subs = raw.get("subjects") or []
+    all_sems = raw.get("semesters") or []
+    htno = str(raw.get("htno") or "").strip().upper()
+    detected_primary_reg = default_registry.detect_regulation_from_htno(htno)
+
+    matching_subs = []
+    for s in all_subs:
+        code = str(s.get("subject_code") or "").strip()
+        code_reg = default_registry.detect_regulation_from_subject_code(code)
+        subj_reg = (s.get("regulation") or code_reg or raw.get("regulation") or detected_primary_reg).upper()
+        if code_reg:
+            if code_reg.upper() == target:
+                s_copy = dict(s)
+                s_copy["regulation"] = target
+                matching_subs.append(s_copy)
+        elif subj_reg == target:
+            s_copy = dict(s)
+            s_copy["regulation"] = target
+            matching_subs.append(s_copy)
+
+    if not matching_subs:
+        return None
+
+    matching_sem_keys = {(int(s.get("year") or 0), int(s.get("sem") or 0)) for s in matching_subs}
+    matching_sems = [
+        dict(sem, regulation=target)
+        for sem in all_sems
+        if (int(sem.get("year") or 0), int(sem.get("sem") or 0)) in matching_sem_keys
+    ]
+
+    return {
+        **raw,
+        "regulation": target,
+        "subjects": matching_subs,
+        "semesters": matching_sems,
+    }
+
+
 @app.post("/fetch/htno")
 async def fetch_by_hall_ticket(request: HallTicketRequest):
     htnos = normalize_htno_list(request.htno, request.related_htnos)
@@ -764,8 +811,13 @@ async def fetch_by_hall_ticket(request: HallTicketRequest):
     try:
         loop = asyncio.get_running_loop()
 
+        raw_memo: Dict[str, Any] = {}
+
         def _source_fetch(h: str, r: str, f: bool):
-            return fetch_api_and_parse(h, force_refresh=f)
+            clean_h = h.strip().upper()
+            if clean_h not in raw_memo:
+                raw_memo[clean_h] = fetch_api_and_parse(clean_h, force_refresh=f)
+            return filter_student_result_by_regulation(raw_memo[clean_h], r)
 
         resolver = DynamicRegulationResolver(
             registry=default_registry,

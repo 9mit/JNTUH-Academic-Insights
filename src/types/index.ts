@@ -34,12 +34,25 @@ export interface Semester {
     regulation?: Regulation;
 }
 
+export interface ResolutionAuditItem {
+    regulation: string;
+    status: 'FOUND' | 'NOT_FOUND' | 'SOURCE_ERROR';
+    semesters_found: number;
+    subjects_found: number;
+    error?: string;
+}
+
 export interface AcademicData {
     regulation: Regulation;
     semesters: Semester[];
     studentName?: string;
     hallTicket?: string;
     official_cgpa?: number;
+    studentStatus?: 'active' | 'detained' | 'graduated' | 'incomplete';
+    isConsolidated?: boolean;
+    regulationsSeen?: string[];
+    resolutionAudit?: ResolutionAuditItem[];
+    searchPath?: string[];
 }
 
 export interface ParsedSubject {

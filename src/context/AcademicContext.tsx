@@ -28,6 +28,11 @@ interface AcademicContextType {
         hallTicket?: string;
         regulation?: Regulation;
         officialCGPA?: number;
+        studentStatus?: 'active' | 'detained' | 'graduated' | 'incomplete';
+        isConsolidated?: boolean;
+        regulationsSeen?: string[];
+        resolutionAudit?: any[];
+        searchPath?: string[];
     }) => void;
     hydrateAcademicData: (payload: AcademicData) => void;
     clearAllData: () => void;
@@ -223,6 +228,11 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
         hallTicket?: string;
         regulation?: Regulation;
         officialCGPA?: number;
+        studentStatus?: 'active' | 'detained' | 'graduated' | 'incomplete';
+        isConsolidated?: boolean;
+        regulationsSeen?: string[];
+        resolutionAudit?: any[];
+        searchPath?: string[];
     }) => {
         const base = createEmptySemesters();
         const merged = base.map((empty) => {
@@ -261,6 +271,11 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
             semesters: merged,
             studentName: payload.studentName || '',
             hallTicket: payload.hallTicket || '',
+            studentStatus: payload.studentStatus,
+            isConsolidated: payload.isConsolidated,
+            regulationsSeen: payload.regulationsSeen,
+            resolutionAudit: payload.resolutionAudit,
+            searchPath: payload.searchPath,
             ...(typeof payload.officialCGPA === 'number' && payload.officialCGPA > 0
                 ? { official_cgpa: payload.officialCGPA }
                 : {}),
@@ -294,6 +309,11 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
             studentName: payload.studentName || '',
             hallTicket: payload.hallTicket || '',
             official_cgpa: payload.official_cgpa,
+            studentStatus: payload.studentStatus,
+            isConsolidated: payload.isConsolidated,
+            regulationsSeen: payload.regulationsSeen,
+            resolutionAudit: payload.resolutionAudit,
+            searchPath: payload.searchPath,
         });
     }, []);
 
