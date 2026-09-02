@@ -110,11 +110,12 @@ function CelebrationModal({ isOpen, onClose, studentName }: { isOpen: boolean; o
 }
 
 export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () => void }) {
-    const { replaceFromImport, data } = useAcademic();
+    const { replaceFromImport, data, setRegulation } = useAcademic();
     const [isDragging, setIsDragging] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [showCelebration, setShowCelebration] = useState(false);
     const [htnoInput, setHtnoInput] = useState('');
+    const [selectedReg, setSelectedReg] = useState<string>(data.regulation || 'R18');
 
     const processResults = useCallback((
         subjects: BackendSubject[],
@@ -349,7 +350,7 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
             `Refreshing & fetching full history for ${htnoInput.trim().toUpperCase()}… (may take up to 2 min)`
         );
         try {
-            const response = await fetchByHallTicket(htnoInput.trim(), true);
+            const response = await fetchByHallTicket(htnoInput.trim(), true, selectedReg);
 
             if (response.success && response.subjects) {
                 processResults(
@@ -437,6 +438,24 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                                 onChange={(e) => handleFiles(e.target.files)}
                                 className="hidden"
                             />
+
+                            <select
+                                value={selectedReg}
+                                onChange={(e) => {
+                                    const next = e.target.value;
+                                    setSelectedReg(next);
+                                    setRegulation(next as Regulation);
+                                }}
+                                disabled={isProcessing}
+                                className="bg-white/[0.06] hover:bg-white/[0.1] text-white text-xs font-semibold px-2.5 py-2 rounded-xl border border-white/10 focus:outline-none cursor-pointer mr-2 transition-colors disabled:opacity-50"
+                                title="Starting Regulation (Dynamic resolution automatically searches across regulations if incomplete)"
+                            >
+                                {['R18', 'R22', 'R24', 'R25', 'R16', 'R15', 'R13'].map((r) => (
+                                    <option key={r} value={r} className="bg-slate-900 text-white font-medium">
+                                        {r}
+                                    </option>
+                                ))}
+                            </select>
 
                             <motion.button
                                 whileHover={{ scale: 1.02 }}

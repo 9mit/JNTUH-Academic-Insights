@@ -38,6 +38,9 @@ from backend.history_merge import (
     dedupe_subjects_best_attempt,
     consolidate_semester_rows,
 )
+from backend.regulation_registry import default_registry
+from backend.result_merger import default_merger
+from backend.dynamic_resolver import DynamicRegulationResolver, default_resolver
 from backend.dhethi_parse import (
     flatten_academic_results,
     flatten_all_results,
@@ -334,6 +337,7 @@ class Subject(BaseModel):
 class HallTicketRequest(BaseModel):
     """Hall ticket. Same HT is used across detention → rejoin; regulation may change mid-career."""
     htno: str = Field(..., min_length=10, max_length=24, description="10-character Hall Ticket Number")
+    regulation: Optional[str] = Field(default=None, description="Starting regulation selected by user, e.g. R18, R22")
     related_htnos: List[str] = Field(default_factory=list, description="Optional; rarely needed")
     force_refresh: bool = Field(
         default=True,
@@ -725,6 +729,24 @@ code{background:#f3f4f6;padding:.1rem .35rem;border-radius:4px}</style></head>
     )
 
 
+@app.get("/api/regulations")
+async def get_available_regulations():
+    """Return dynamically configured regulations for client consumption."""
+    return {
+        "regulations": [
+            {
+                "id": r.regulation_id,
+                "name": r.display_name,
+                "order": r.order,
+                "required_credits": r.required_credits,
+                "start_year": r.academic_start_year,
+                "is_active": r.is_active,
+            }
+            for r in default_registry.list_regulations(active_only=True)
+        ]
+    }
+
+
 @app.post("/fetch/htno")
 async def fetch_by_hall_ticket(request: HallTicketRequest):
     htnos = normalize_htno_list(request.htno, request.related_htnos)
@@ -741,34 +763,73 @@ async def fetch_by_hall_ticket(request: HallTicketRequest):
 
     try:
         loop = asyncio.get_running_loop()
-        parts: List[dict] = []
-        errors: List[str] = []
+
+        def _source_fetch(h: str, r: str, f: bool):
+            return fetch_api_and_parse(h, force_refresh=f)
+
+        resolver = DynamicRegulationResolver(
+            registry=default_registry,
+            merger=default_merger,
+            source_fetcher=_source_fetch,
+        )
+
+        if len(htnos) == 1:
+            primary_ht = htnos[0]
+            resolved = await loop.run_in_executor(
+                THREAD_POOL,
+                lambda: resolver.resolve_student_result(
+                    primary_ht,
+                    selected_regulation=request.regulation,
+                    force_refresh=request.force_refresh,
+                    status_fn=get_student_status_from_semesters,
+                ),
+            )
+            if not resolved.get("success"):
+                status_code = 502 if resolved.get("fetch_status") == "SOURCE_ERROR" else 404
+                raise HTTPException(
+                    status_code=status_code,
+                    detail=resolved.get("detail", "No results found or Invalid Hall Ticket Number."),
+                )
+            return resolved
+
+        # Multi-HTNO resolution
+        resolved_parts = []
+        errors = []
         for ht in htnos:
             try:
-                part = await loop.run_in_executor(
+                res = await loop.run_in_executor(
                     THREAD_POOL,
-                    lambda h=ht: fetch_api_and_parse(h, force_refresh=request.force_refresh),
+                    lambda h=ht: resolver.resolve_student_result(
+                        h,
+                        selected_regulation=request.regulation,
+                        force_refresh=request.force_refresh,
+                        status_fn=get_student_status_from_semesters,
+                    ),
                 )
-                parts.append(part)
-            except HTTPException as e:
-                errors.append(f"{ht}: {e.detail}")
+                if res.get("success"):
+                    resolved_parts.append(res)
+                else:
+                    errors.append(f"{ht}: {res.get('detail')}")
             except Exception as e:
                 errors.append(f"{ht}: {e}")
 
-        if not parts:
+        if not resolved_parts:
             detail = errors[0] if len(errors) == 1 else (" | ".join(errors) or "Failed to fetch results")
             raise HTTPException(status_code=404 if "No results" in detail or "Invalid" in detail else 502, detail=detail)
 
-        result = merge_academic_histories(parts, status_fn=get_student_status_from_semesters)
+        merged = default_merger.merge(
+            resolved_parts,
+            status_fn=get_student_status_from_semesters,
+        ).to_dict()
         if errors:
-            result["partial_errors"] = errors
+            merged["partial_errors"] = errors
         logger.info(
             "Fetched %s subjects for %s (merged %s HT(s))",
-            result["total_subjects"],
-            ",".join(mask_hall_ticket(h) for h in result.get("hall_tickets") or htnos),
-            len(parts),
+            merged.get("total_subjects", 0),
+            ",".join(mask_hall_ticket(h) for h in merged.get("hall_tickets") or htnos),
+            len(resolved_parts),
         )
-        return result
+        return merged
 
     except HTTPException:
         raise

@@ -38,9 +38,16 @@ export default function SemesterCard({ semester }: SemesterCardProps) {
                     )}
 
                     <div className="text-left">
-                        <span className="block text-sm font-bold text-text-primary">
-                            {getSemesterLabel(semester.year, semester.sem)}
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <span className="block text-sm font-bold text-text-primary">
+                                {getSemesterLabel(semester.year, semester.sem)}
+                            </span>
+                            {semester.regulation && (
+                                <span className="text-[10px] font-semibold font-mono px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20 text-primary">
+                                    {semester.regulation}
+                                </span>
+                            )}
+                        </div>
                         {hasData ? (
                             <span className="status-badge badge-success">
                                 SGPA: {sgpa.toFixed(2)}

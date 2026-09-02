@@ -94,7 +94,7 @@ export function parseHallTicketInput(raw: string): { primary: string; related: s
     return { primary: valid[0], related: valid.slice(1) };
 }
 
-export async function fetchByHallTicket(htno: string, forceRefresh = true) {
+export async function fetchByHallTicket(htno: string, forceRefresh = true, regulation?: string) {
     const { primary, related } = parseHallTicketInput(htno);
 
     try {
@@ -107,6 +107,7 @@ export async function fetchByHallTicket(htno: string, forceRefresh = true) {
                     htno: primary,
                     related_htnos: related,
                     force_refresh: forceRefresh,
+                    regulation: regulation || undefined,
                 }),
             },
             AUTO_FETCH_TIMEOUT

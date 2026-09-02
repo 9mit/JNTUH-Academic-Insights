@@ -43,8 +43,23 @@ export default function Dashboard() {
         );
     }
 
+    const distinctRegulations = Array.from(
+        new Set(data.semesters.map((s) => s.regulation).filter(Boolean))
+    ) as string[];
+    const isMultiRegulation = distinctRegulations.length > 1;
+
     return (
         <div className="space-y-8 select-none">
+            {isMultiRegulation && (
+                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-medium">
+                    <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>
+                        Consolidated Academic Record reconstructed across regulations:{' '}
+                        <strong className="font-semibold text-white">{distinctRegulations.join(' → ')}</strong>
+                    </span>
+                </div>
+            )}
+
             <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-5 border-b border-white/[0.06] pb-5">
                 <div className="flex items-center gap-3 shrink-0">
                     <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
