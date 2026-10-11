@@ -1,7 +1,7 @@
 import { useAcademic } from '../../context/AcademicContext';
 import { getBacklogs } from '../../utils/calculations';
-import { getSemesterLabel } from '../../constants/grading';
-import { AlertTriangle, BookX } from 'lucide-react';
+import { getSemesterShortLabel } from '../../constants/grading';
+import { AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function BacklogsList() {
     const { data } = useAcademic();
@@ -9,14 +9,16 @@ export default function BacklogsList() {
 
     if (backlogs.length === 0) {
         return (
-            <div
-                className="bg-gradient-to-br from-emerald-500/10 to-bg-card rounded-3xl p-6 border border-emerald-500/20 text-center"
-            >
-                <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-500/20 flex items-center justify-center mb-4">
-                    <BookX className="w-6 h-6 text-emerald-400" />
+            <div className="card p-6 border border-border flex items-start gap-3.5">
+                <div className="w-8 h-8 rounded-md bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 </div>
-                <h4 className="text-lg font-bold text-white mb-1">No Backlogs!</h4>
-                <p className="text-sm text-text-muted">You have cleared all your subjects. Great job! 🎉</p>
+                <div>
+                    <h4 className="text-sm font-semibold text-text-primary">Clean Academic Record</h4>
+                    <p className="text-xs text-text-muted mt-0.5">
+                        Zero pending backlogs across all recorded semesters.
+                    </p>
+                </div>
             </div>
         );
     }
@@ -24,77 +26,75 @@ export default function BacklogsList() {
     const totalLostCredits = backlogs.reduce((sum, b) => sum + b.credits, 0);
 
     return (
-        <div
-            className="bg-gradient-to-br from-rose-500/10 to-bg-card rounded-3xl p-6 border border-rose-500/20"
-        >
+        <div className="card p-5 border border-border">
             {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-rose-500/20 flex items-center justify-center">
-                        <AlertTriangle className="w-5 h-5 text-rose-400" />
+            <div className="flex items-center justify-between pb-4 mb-4 border-b border-border">
+                <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-md bg-rose-50 border border-rose-200 flex items-center justify-center shrink-0">
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
                     </div>
                     <div>
-                        <h4 className="text-lg font-bold text-white">Backlogs</h4>
-                        <p className="text-xs text-rose-400 font-medium">Clear these to complete your degree</p>
+                        <h4 className="text-sm font-semibold text-text-primary">Pending Backlogs</h4>
+                        <p className="text-xs text-text-muted">Courses requiring supplementary clearance</p>
                     </div>
                 </div>
-                <div className="text-right">
-                    <p className="text-2xl font-black text-rose-400">{backlogs.length}</p>
-                    <p className="text-[10px] text-text-muted uppercase tracking-wider">Subjects</p>
+                <div className="text-right font-mono">
+                    <span className="text-sm font-semibold text-rose-600">{backlogs.length}</span>
+                    <span className="text-xs text-text-muted ml-1">subjects ({totalLostCredits} cr)</span>
                 </div>
             </div>
 
             {/* Table */}
             <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-xs font-mono">
                     <thead>
-                        <tr className="border-b border-white/10">
-                            <th className="text-left py-3 px-2 text-[10px] font-bold text-text-muted uppercase tracking-wider">Subject</th>
-                            <th className="text-left py-3 px-2 text-[10px] font-bold text-text-muted uppercase tracking-wider">Semester</th>
-                            <th className="text-center py-3 px-2 text-[10px] font-bold text-text-muted uppercase tracking-wider">Grade</th>
-                            <th className="text-right py-3 px-2 text-[10px] font-bold text-text-muted uppercase tracking-wider">Credits</th>
+                        <tr className="border-b border-border text-text-muted text-[10px] uppercase tracking-wider">
+                            <th className="text-left pb-2 font-medium">Subject</th>
+                            <th className="text-left pb-2 font-medium">Sem</th>
+                            <th className="text-center pb-2 font-medium">Grade</th>
+                            <th className="text-right pb-2 font-medium">Credits</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-border/60">
                         {backlogs.map((backlog, i) => (
-                            <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                                <td className="py-3 px-2">
-                                    <p className="font-medium text-white truncate max-w-[200px]">{backlog.subjectName}</p>
+                            <tr key={i} className="hover:bg-surface-subtle transition-colors">
+                                <td className="py-2.5 pr-2">
+                                    <p className="font-sans font-medium text-text-primary truncate max-w-[220px]">
+                                        {backlog.subjectName}
+                                    </p>
                                     {backlog.subjectCode && (
-                                        <p className="text-[10px] text-text-muted">{backlog.subjectCode}</p>
+                                        <p className="text-[10px] text-text-muted mt-0.5">{backlog.subjectCode}</p>
                                     )}
                                 </td>
-                                <td className="py-3 px-2 text-text-secondary">
-                                    {getSemesterLabel(backlog.year, backlog.sem)}
+                                <td className="py-2.5 px-2 text-text-secondary">
+                                    {getSemesterShortLabel(backlog.year, backlog.sem)}
                                 </td>
-                                <td className="py-3 px-2 text-center">
-                                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${backlog.grade === 'F'
-                                            ? 'bg-rose-500/20 text-rose-400'
-                                            : 'bg-amber-500/20 text-amber-400'
-                                        }`}>
-                                        {backlog.grade === 'Ab' ? 'Absent' : backlog.grade}
+                                <td className="py-2.5 px-2 text-center">
+                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                        backlog.grade === 'Ab'
+                                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                            : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                    }`}>
+                                        {backlog.grade === 'Ab' ? 'ABSENT' : backlog.grade}
                                     </span>
                                 </td>
-                                <td className="py-3 px-2 text-right font-bold text-text-secondary">
+                                <td className="py-2.5 pl-2 text-right text-text-secondary tabular-nums">
                                     {backlog.credits}
                                 </td>
                             </tr>
                         ))}
                     </tbody>
                     <tfoot>
-                        <tr className="border-t border-white/10">
-                            <td colSpan={3} className="py-3 px-2 text-right text-xs font-bold text-text-muted uppercase">Total Lost Credits</td>
-                            <td className="py-3 px-2 text-right text-lg font-black text-rose-400">{totalLostCredits}</td>
+                        <tr className="border-t border-border font-semibold">
+                            <td colSpan={3} className="pt-3 text-right text-[11px] text-text-muted uppercase">
+                                Total At Risk
+                            </td>
+                            <td className="pt-3 text-right text-sm text-rose-600 tabular-nums">
+                                {totalLostCredits} cr
+                            </td>
                         </tr>
                     </tfoot>
                 </table>
-            </div>
-
-            {/* CTA */}
-            <div className="mt-4 p-3 bg-rose-500/10 rounded-xl border border-rose-500/10 text-center">
-                <p className="text-xs text-rose-300">
-                    💡 Clear these {backlogs.length} subject(s) to earn <span className="font-bold">{totalLostCredits} credits</span> and complete your degree.
-                </p>
             </div>
         </div>
     );

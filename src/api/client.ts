@@ -3,8 +3,8 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 // Default timeout for API requests (60 seconds for auto-fetch, 30 seconds for others)
 const DEFAULT_TIMEOUT = 30000;
-/** hardRefresh + dual dhethi poll can exceed 60s */
-const AUTO_FETCH_TIMEOUT = 180000;
+/** Upstream fetch timeout (reduced from 180s to prevent indefinite hanging) */
+const AUTO_FETCH_TIMEOUT = 45000;
 
 /**
  * Helper to create a fetch request with timeout

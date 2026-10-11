@@ -18,6 +18,8 @@ export interface Subject {
     official_sem_sgpa?: number; // Official SGPA from memo
     /** Per-subject regulation when career spans multiple schemes */
     regulation?: Regulation;
+    examCode?: string;
+    attemptType?: string;
 }
 
 export interface Semester {
@@ -53,6 +55,7 @@ export interface AcademicData {
     regulationsSeen?: string[];
     resolutionAudit?: ResolutionAuditItem[];
     searchPath?: string[];
+    allAttempts?: Subject[];
 }
 
 export interface ParsedSubject {
@@ -132,4 +135,9 @@ export type TabType =
     | 'help'
     | 'notifications'
     | 'credits'
-    | 'backlog';
+    | 'backlog'
+    | 'jobs'
+    | 'compare'
+    | 'calendars'
+    | 'class'
+    | 'journey';

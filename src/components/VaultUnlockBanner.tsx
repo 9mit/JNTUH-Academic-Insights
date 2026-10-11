@@ -42,9 +42,9 @@ export default function VaultUnlockBanner() {
   };
 
   return (
-    <div className="mb-6 card p-4 border border-emerald-500/25 bg-emerald-500/5 flex flex-col sm:flex-row gap-3 sm:items-center">
+    <div className="mb-6 card p-4 border border-emerald-200 bg-emerald-50 flex flex-col sm:flex-row gap-3 sm:items-center">
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-bold text-emerald-300">Encrypted session found on this device</p>
+        <p className="text-sm font-bold text-emerald-900">Encrypted session found on this device</p>
         <p className="text-xs text-text-muted mt-1">Enter your PIN to restore grades without re-importing.</p>
       </div>
       <div className="flex flex-wrap gap-2 items-center">
@@ -62,7 +62,7 @@ export default function VaultUnlockBanner() {
           {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Unlock className="w-3.5 h-3.5" />}
           Unlock
         </button>
-        <button type="button" onClick={() => setShow(false)} className="inline-flex items-center justify-center h-10 w-10 text-text-muted hover:text-white rounded-lg hover:bg-white/5" aria-label="Dismiss">
+        <button type="button" onClick={() => setShow(false)} className="inline-flex items-center justify-center h-10 w-10 text-text-muted hover:text-text-primary rounded-lg hover:bg-surface-subtle cursor-pointer" aria-label="Dismiss">
           <X className="w-4 h-4" />
         </button>
       </div>

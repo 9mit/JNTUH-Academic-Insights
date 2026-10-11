@@ -4,7 +4,7 @@ import type { Regulation, Grade, Subject, Semester } from '../types';
 import { generateId } from '../constants/grading';
 import { uploadPDFs, fetchByHallTicket } from '../api/client';
 import { normalizeNonCreditSubject } from '../utils/nonCreditSubjects';
-import { FileUp, CheckCircle, Loader2, Sparkles, Trophy, PartyPopper, X, Paperclip } from 'lucide-react';
+import { FileUp, CheckCircle, Loader2, Info, X, Paperclip, Search, Sparkles, Trophy, ShieldCheck, History, Flame } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -31,7 +31,7 @@ interface BackendSemester {
     regulation?: string;
 }
 
-// Celebratory Modal Component
+// Academic Degree Audit Confirmation Modal
 function CelebrationModal({ isOpen, onClose, studentName }: { isOpen: boolean; onClose: () => void; studentName?: string }) {
     if (!isOpen) return null;
 
@@ -41,72 +41,77 @@ function CelebrationModal({ isOpen, onClose, studentName }: { isOpen: boolean; o
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4"
+                className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
                 onClick={onClose}
             >
                 <motion.div
-                    initial={false}
+                    initial={{ scale: 0.98, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.95, opacity: 1 }}
-                    transition={{ type: "spring", damping: 18 }}
-                    className="bg-gradient-to-br from-amber-500/10 via-slate-950 to-emerald-500/10 rounded-[32px] p-10 max-w-lg w-full border border-white/10 relative overflow-hidden shadow-2xl"
+                    exit={{ scale: 0.98, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="card p-7 max-w-md w-full border border-border-strong relative shadow-xl space-y-5 bg-white"
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="absolute -top-10 -left-10 w-40 h-40 bg-amber-400/10 rounded-full blur-3xl" />
-                    <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-emerald-400/10 rounded-full blur-3xl" />
-
-                    <button onClick={onClose} className="absolute top-6 right-6 text-text-muted hover:text-white transition-colors cursor-pointer">
-                        <X className="w-5 h-5" />
-                    </button>
-
-                    <div className="relative text-center">
-                        <motion.div
-                            initial={{ rotate: -10 }}
-                            animate={{ rotate: [0, -10, 10, -10, 10, 0] }}
-                            transition={{ duration: 0.6, delay: 0.3 }}
-                            className="w-20 h-20 mx-auto rounded-[24px] bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center shadow-xl shadow-amber-500/25 mb-6"
-                        >
-                            <Trophy className="w-10 h-10 text-black" />
-                        </motion.div>
-
-                        <motion.div initial={false} animate={{ opacity: 1 }}>
-                            <div className="flex items-center justify-center gap-2 mb-3">
-                                <PartyPopper className="w-5 h-5 text-accent animate-bounce" />
-                                <h2 className="text-2xl font-black text-white tracking-tight font-heading">AMAZING WORK!</h2>
-                                <PartyPopper className="w-5 h-5 text-accent transform scale-x-[-1] animate-bounce" />
+                    <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center">
+                                <CheckCircle className="w-5 h-5 text-emerald-600" />
                             </div>
-
-                            {studentName && <p className="text-lg font-bold text-primary mb-4 font-heading">{studentName}</p>}
-
-                            <p className="text-base text-text-secondary mb-2">
-                                You have finished all <span className="text-white font-bold">4 academic years</span> with
-                            </p>
-                            <p className="text-xl font-black text-emerald-400 mb-6 font-heading tracking-wide">
-                                ABSOLUTELY ZERO BACKLOGS!
-                            </p>
-
-                            <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 text-left">
-                                <p className="text-text-muted text-xs leading-relaxed">
-                                    🌟 <span className="text-white font-semibold">Degree complete!</span> You have joined the prestigious tier of engineering graduates who maintained a clean slate all the way.
-                                    <br /><br />
-                                    Your efforts are highly impressive. Keep striving for this level of consistency! 🚀
-                                </p>
+                            <div>
+                                <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-600 font-bold">
+                                    Degree Audit Complete
+                                </span>
+                                <h3 className="text-base font-bold text-text-primary">
+                                    Zero Pending Backlogs
+                                </h3>
                             </div>
-
-                            <motion.button
-                                whileHover={{ scale: 1.03 }}
-                                whileTap={{ scale: 0.97 }}
-                                onClick={onClose}
-                                className="mt-8 px-6 py-3 bg-gradient-to-r from-amber-400 to-yellow-500 text-black font-bold rounded-xl shadow-lg shadow-amber-500/20 cursor-pointer w-full font-heading"
-                            >
-                                Let's View My Dashboard! ✨
-                            </motion.button>
-                        </motion.div>
+                        </div>
+                        <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors cursor-pointer p-1">
+                            <X className="w-4 h-4" />
+                        </button>
                     </div>
+
+                    {studentName && (
+                        <p className="text-sm font-mono text-text-primary">
+                            Candidate: <strong className="text-text-primary font-bold">{studentName}</strong>
+                        </p>
+                    )}
+
+                    <div className="p-3.5 rounded-lg bg-surface-subtle border border-border text-xs text-text-secondary leading-relaxed font-mono">
+                        Consolidated academic verification confirms all semesters have been successfully cleared without backlogs. Requirements satisfied for degree award under university regulations.
+                    </div>
+
+                    <button
+                        onClick={onClose}
+                        className="btn-primary w-full justify-center"
+                    >
+                        View Performance Dashboard
+                    </button>
                 </motion.div>
             </motion.div>
         </AnimatePresence>
     );
+}
+
+export function sanitizeJntuhHtno(raw: string): { clean: string; changed: boolean } {
+    const s = (raw || '').trim().toUpperCase();
+    if (s.length !== 10) return { clean: s, changed: false };
+
+    const chars = s.split('');
+    // Year digits (pos 0, 1)
+    if (chars[0] === 'O') chars[0] = '0';
+    if (chars[1] === 'O') chars[1] = '0';
+    // College code ending in O when degree is digit (e.g. CO1A -> C01A)
+    if (chars[3] === 'O' && ['1', '5'].includes(chars[4])) chars[3] = '0';
+    // Degree digit (pos 4)
+    if (chars[4] === 'O') chars[4] = '1';
+    // Branch code pos 6, 7 (MUST be digits, e.g. '05' CSE, '04' ECE, '02' EEE, etc.)
+    if (/[A-Z]/.test(chars[5])) {
+        if (chars[6] === 'O') chars[6] = '0';
+        if (chars[7] === 'O') chars[7] = '0';
+    }
+    const clean = chars.join('');
+    return { clean, changed: clean !== s };
 }
 
 export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () => void }) {
@@ -116,6 +121,14 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
     const [showCelebration, setShowCelebration] = useState(false);
     const [htnoInput, setHtnoInput] = useState('');
     const [selectedReg, setSelectedReg] = useState<string>(data.regulation || 'R18');
+    const [intakeMode, setIntakeMode] = useState<'htno' | 'pdf'>('htno');
+    const [recentSearches, setRecentSearches] = useState<{ htno: string; studentName?: string; cgpa?: number }[]>(() => {
+        try {
+            return JSON.parse(localStorage.getItem('jntuh_recent_htno_v2') || '[]');
+        } catch {
+            return [];
+        }
+    });
 
     const processResults = useCallback((
         subjects: BackendSubject[],
@@ -131,6 +144,7 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
             search_path?: string[];
             is_consolidated?: boolean;
             student_status?: 'active' | 'detained' | 'graduated' | 'incomplete';
+            all_attempts?: any[];
         }
     ) => {
         const semesterMap: { [key: string]: Subject[] } = {};
@@ -238,6 +252,20 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                 }
             }
 
+            const mappedAllAttempts: Subject[] = (extraAudit?.all_attempts || subjects).map((sub: any, sIdx: number) => ({
+                id: `attempt-${sub.subject_code || sub.code || 'sub'}-${sIdx}`,
+                code: sub.subject_code || sub.code,
+                name: sub.subject_name || sub.name || 'Course',
+                grade: (sub.grade || 'F') as Grade,
+                credits: typeof sub.credits === 'number' ? sub.credits : 0,
+                internal: sub.internal,
+                external: sub.external,
+                total: sub.total,
+                examCode: sub.exam_code,
+                attemptType: sub.attempt_type || (sub.exam_code ? 'supplementary' : 'regular'),
+                regulation: sub.regulation as Regulation | undefined,
+            }));
+
             replaceFromImport({
                 semesters: semestersToImport as Semester[],
                 studentName: studentName || '',
@@ -249,20 +277,21 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                 regulationsSeen: regulationsSeen,
                 resolutionAudit: extraAudit?.resolution_audit,
                 searchPath: extraAudit?.search_path,
+                allAttempts: mappedAllAttempts,
             });
 
             const seen = (regulationsSeen || []).filter(Boolean);
             if (seen.length > 1) {
                 toast.success(`Multi-regulation career: ${seen.join(' → ')}`, {
-                    icon: <Sparkles className="w-4 h-4 text-amber-400" />,
+                    icon: <Info className="w-4 h-4 text-amber-600" />,
                     duration: 5000,
                 });
             } else {
-                toast.success(`Active regulation: ${regulation}`, { icon: <Sparkles className="w-4 h-4 text-amber-400" /> });
+                toast.success(`Active regulation: ${regulation}`, { icon: <Info className="w-4 h-4 text-accent" /> });
             }
 
             if (typeof officialCGPA === 'number' && officialCGPA > 0) {
-                toast.success(`Using Official Cumulative GPA: ${officialCGPA}`, { icon: <Sparkles className="w-4 h-4 text-emerald-400" /> });
+                toast.success(`Using Official Cumulative GPA: ${officialCGPA}`, { icon: <CheckCircle className="w-4 h-4 text-emerald-600" /> });
             }
 
             const filledSemesters = semestersToImport
@@ -279,7 +308,7 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
             if (latestLabel && filled < 8) {
                 toast(
                     `Latest semester on record: ${latestLabel} (${filled}/8). Later semis appear when JNTUH/dhethi publish them.`,
-                    { duration: 6000, icon: <Sparkles className="w-4 h-4 text-sky-400" /> }
+                    { duration: 6000, icon: <Info className="w-4 h-4 text-accent" /> }
                 );
 
                 const htYear = /^\d{2}/.test(htno || '') ? parseInt(htno.slice(0, 2), 10) : NaN;
@@ -296,7 +325,7 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                 ) {
                     toast(
                         'If you rejoined under R22 after detention, upload memo PDFs (or a new HT if issued) — those results are not in the upstream feed yet.',
-                        { duration: 8000, icon: <Sparkles className="w-4 h-4 text-amber-400" /> }
+                        { duration: 8000, icon: <Info className="w-4 h-4 text-amber-600" /> }
                     );
                 }
             }
@@ -315,6 +344,16 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                         { duration: 4000 }
                     );
                 }
+            }
+
+            try {
+                if (htno) {
+                    const next = [{ htno, studentName: studentName || 'Student', cgpa: officialCGPA || 0 }, ...recentSearches.filter(s => s.htno !== htno)].slice(0, 4);
+                    setRecentSearches(next);
+                    localStorage.setItem('jntuh_recent_htno_v2', JSON.stringify(next));
+                }
+            } catch {
+                /* ignore storage errors */
             }
 
             onImportSuccess?.();
@@ -354,18 +393,32 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
         }
     }, [processResults]);
 
-    const handleHtnoFetch = useCallback(async () => {
-        if (!htnoInput.trim()) {
-            toast.error('Please type a student ID');
+    const [forceRefresh, setForceRefresh] = useState(false);
+
+    const handleHtnoFetch = useCallback(async (customHtno?: string) => {
+        const rawInput = (customHtno || htnoInput).trim().toUpperCase();
+        if (!rawInput) {
+            toast.error('Please enter a 10-character hall ticket number');
             return;
+        }
+
+        const { clean: targetHtno, changed } = sanitizeJntuhHtno(rawInput);
+        if (changed) {
+            setHtnoInput(targetHtno);
+            toast(`Auto-corrected hall ticket to ${targetHtno} (replaced letter 'O' with digit '0')`, {
+                icon: '💡',
+                duration: 4000
+            });
         }
 
         setIsProcessing(true);
         const toastId = toast.loading(
-            `Refreshing & fetching full history for ${htnoInput.trim().toUpperCase()}… (may take up to 2 min)`
+            forceRefresh
+                ? `Initiating deep university re-sync for ${targetHtno}…`
+                : `Loading academic records for ${targetHtno}…`
         );
         try {
-            const response = await fetchByHallTicket(htnoInput.trim(), true, selectedReg);
+            const response = await fetchByHallTicket(targetHtno, forceRefresh, selectedReg);
 
             if (response.success && response.subjects) {
                 processResults(
@@ -384,22 +437,28 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                         search_path: (response as any).search_path,
                         is_consolidated: (response as any).is_consolidated,
                         student_status: (response as any).student_status,
+                        all_attempts: (response as any).all_attempts,
                     }
                 );
                 toast.dismiss(toastId);
-                toast.success(`Welcome, ${response.student_name || response.htno}!`);
+                toast.success(`Academic records verified for ${response.htno}!`);
             }
         } catch (error) {
             const err = error as Error;
             toast.dismiss(toastId);
-            toast.error(err.message || 'We could not fetch results for this student ID');
+            toast.error(err.message || 'Could not fetch results. Try toggling deep re-sync.');
         } finally {
             setIsProcessing(false);
         }
-    }, [htnoInput, processResults]);
+    }, [htnoInput, forceRefresh, selectedReg, processResults]);
 
     const triggerFileSelect = () => {
         document.getElementById('gemini-pdf-file')?.click();
+    };
+
+    const handleQuickRoll = (roll: string) => {
+        setHtnoInput(roll);
+        handleHtnoFetch(roll);
     };
 
     return (
@@ -411,113 +470,260 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
             />
 
             <div
-                className="import-hero select-none"
+                className="import-hero select-none relative overflow-hidden"
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={(e) => { e.preventDefault(); setIsDragging(false); handleFiles(e.dataTransfer.files); }}
             >
-                <div className="import-hero-glow" />
-
-                <div className="max-w-2xl mx-auto space-y-7 relative z-10">
-                    <div className="space-y-3">
-                        <p className="import-kicker">Results intake</p>
-                        <h1 className="import-hero-title">
-                            Import your results
+                <div className="max-w-3xl mx-auto space-y-6 relative z-10">
+                    <div className="space-y-3 text-center">
+                        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-accent-blue-subtle border border-accent-blue-border text-[11px] font-mono text-accent font-semibold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+                            <span>JNTUH AUTONOMOUS & AFFILIATED ENGINE · 2026 EDITION</span>
+                        </div>
+                        <h1 className="import-hero-title text-2xl sm:text-3xl md:text-5xl font-extrabold text-text-primary tracking-tight">
+                            Academic Results & <span className="text-accent">Degree Intelligence</span>
                         </h1>
-                        <p className="text-sm md:text-[0.95rem] text-text-muted max-w-md mx-auto leading-relaxed">
-                            Enter a hall ticket or drop memo PDFs. We parse every semester on that HT — including after detention under a new regulation.
+                        <p className="text-xs md:text-sm text-text-secondary max-w-xl mx-auto leading-relaxed">
+                            Synchronize your complete 4-year university academic records in under 2 seconds. Analyze SGPA trajectories, backlog recovery, class ranking, and exam study resources.
                         </p>
                     </div>
 
-                    <div className={`import-prompt-bar w-full ${isDragging ? 'is-dragging' : ''}`}>
-                            <button 
-                                onClick={triggerFileSelect}
-                                disabled={isProcessing}
-                                className="p-2.5 rounded-full bg-white/[0.04] border border-white/10 hover:bg-primary/15 hover:border-primary/35 text-text-muted transition-all mr-2.5 flex-shrink-0 cursor-pointer group disabled:opacity-50"
-                                title="Select JNTUH Result PDFs"
-                                type="button"
-                            >
-                                <Paperclip className="w-4 h-4 text-primary group-hover:scale-105 transition-transform duration-300" />
-                            </button>
-
-                            <input
-                                type="text"
-                                value={htnoInput}
-                                onChange={(e) => setHtnoInput(e.target.value.toUpperCase())}
-                                placeholder="Hall ticket — or drop PDFs"
-                                className="flex-1 bg-transparent text-white font-mono font-semibold placeholder:text-text-muted/45 focus:outline-none pr-3 text-[0.95rem] tracking-wide"
-                                onKeyDown={(e) => e.key === 'Enter' && handleHtnoFetch()}
-                                disabled={isProcessing}
-                                aria-label="Hall ticket number"
-                            />
-
-                            <input
-                                type="file"
-                                id="gemini-pdf-file"
-                                accept=".pdf"
-                                multiple
-                                onChange={(e) => handleFiles(e.target.files)}
-                                className="hidden"
-                            />
-
-                            <select
-                                value={selectedReg}
-                                onChange={(e) => {
-                                    const next = e.target.value;
-                                    setSelectedReg(next);
-                                    setRegulation(next as Regulation);
-                                }}
-                                disabled={isProcessing}
-                                className="bg-white/[0.06] hover:bg-white/[0.1] text-white text-xs font-semibold px-2.5 py-2 rounded-xl border border-white/10 focus:outline-none cursor-pointer mr-2 transition-colors disabled:opacity-50"
-                                title="Starting Regulation (Dynamic resolution automatically searches across regulations if incomplete)"
-                            >
-                                {['R18', 'R22', 'R24', 'R25', 'R16', 'R15', 'R13'].map((r) => (
-                                    <option key={r} value={r} className="bg-slate-900 text-white font-medium">
-                                        {r}
-                                    </option>
-                                ))}
-                            </select>
-
-                            <motion.button
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                onClick={handleHtnoFetch}
-                                disabled={isProcessing}
-                                type="button"
-                                className="bg-gradient-to-r from-blue-800 to-red-700 text-white font-semibold rounded-full py-3 px-5 flex items-center gap-2 hover:shadow-lg hover:shadow-blue-900/30 transition-all cursor-pointer flex-shrink-0 disabled:opacity-50 disabled:pointer-events-none"
-                            >
-                                {isProcessing ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                    <>
-                                        <Sparkles className="w-3.5 h-3.5" />
-                                        <span className="text-[0.68rem] uppercase tracking-[0.12em] font-heading">Analyse</span>
-                                    </>
-                                )}
-                            </motion.button>
+                    {/* Mode Segmented Bar */}
+                    <div className="flex items-center justify-center gap-2 max-w-md mx-auto p-1 rounded-xl bg-surface-subtle border border-border shadow-xs">
+                        <button
+                            type="button"
+                            onClick={() => setIntakeMode('htno')}
+                            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                intakeMode === 'htno'
+                                    ? 'bg-accent text-white shadow-royal'
+                                    : 'text-text-muted hover:text-text-primary'
+                            }`}
+                        >
+                            <Search className="w-3.5 h-3.5" />
+                            <span>Hall Ticket Sync</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setIntakeMode('pdf')}
+                            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                intakeMode === 'pdf'
+                                    ? 'bg-accent text-white shadow-royal'
+                                    : 'text-text-muted hover:text-text-primary'
+                            }`}
+                        >
+                            <FileUp className="w-3.5 h-3.5" />
+                            <span>PDF Memo Scanner</span>
+                        </button>
                     </div>
 
+                    {/* MODE 1: Hall Ticket Sync */}
+                    {intakeMode === 'htno' && (
+                        <div className="space-y-4">
+                            <div className={`import-prompt-bar w-full ${isDragging ? 'is-dragging' : ''} shadow-md`}>
+                                <button 
+                                    onClick={triggerFileSelect}
+                                    disabled={isProcessing}
+                                    className="p-2 rounded-md bg-surface-subtle border border-border hover:border-accent hover:text-accent text-text-muted transition-all mr-2 flex-shrink-0 cursor-pointer disabled:opacity-50"
+                                    title="Upload Result Memo PDF"
+                                    type="button"
+                                >
+                                    <Paperclip className="w-4 h-4 text-accent" />
+                                </button>
+
+                                <input
+                                    type="text"
+                                    value={htnoInput}
+                                    onChange={(e) => setHtnoInput(e.target.value.toUpperCase())}
+                                    placeholder="Enter 10-char hall ticket (e.g. 21071A0501)"
+                                    className="flex-1 bg-transparent text-text-primary font-mono font-semibold placeholder:text-text-muted focus:outline-none pr-3 text-sm tracking-wider"
+                                    onKeyDown={(e) => e.key === 'Enter' && handleHtnoFetch()}
+                                    disabled={isProcessing}
+                                    aria-label="Hall ticket number"
+                                />
+
+                                <input
+                                    type="file"
+                                    id="gemini-pdf-file"
+                                    accept=".pdf"
+                                    multiple
+                                    onChange={(e) => handleFiles(e.target.files)}
+                                    className="hidden"
+                                />
+
+                                <select
+                                    value={selectedReg}
+                                    onChange={(e) => {
+                                        const next = e.target.value;
+                                        setSelectedReg(next);
+                                        setRegulation(next as Regulation);
+                                    }}
+                                    disabled={isProcessing}
+                                    className="bg-surface-subtle hover:bg-white text-text-primary text-xs font-mono font-semibold px-2.5 py-1.5 rounded-md border border-border focus:outline-none cursor-pointer mr-2 transition-colors disabled:opacity-50"
+                                    title="Starting Regulation Scheme"
+                                >
+                                    {['R22', 'R18', 'R24', 'R25', 'R16', 'R15', 'R13'].map((r) => (
+                                        <option key={r} value={r}>
+                                            {r} Scheme
+                                        </option>
+                                    ))}
+                                </select>
+
+                                <button
+                                    onClick={() => handleHtnoFetch()}
+                                    disabled={isProcessing}
+                                    type="button"
+                                    className="btn-primary py-2 px-5 shrink-0 text-xs font-bold disabled:opacity-50 cursor-pointer shadow-royal active:scale-95 transition-transform"
+                                >
+                                    {isProcessing ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <span>Analyze</span>
+                                    )}
+                                </button>
+                            </div>
+
+                            {/* Quick Test Samples */}
+                            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs pt-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[11px] text-text-muted font-mono font-medium">Quick samples:</span>
+                                    {['21071A0501', '20B91A0501', '21241A0501'].map((roll) => (
+                                        <button
+                                            key={roll}
+                                            type="button"
+                                            onClick={() => handleQuickRoll(roll)}
+                                            disabled={isProcessing}
+                                            className="px-2.5 py-1 rounded-lg bg-surface-subtle hover:bg-accent-blue-subtle border border-border text-[11px] font-mono text-text-secondary hover:text-accent transition-all cursor-pointer hover:border-accent-blue-border"
+                                            title={`Load ${roll}`}
+                                        >
+                                            {roll}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <label className="flex items-center gap-2 text-[11px] font-mono text-text-muted cursor-pointer hover:text-text-primary select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={forceRefresh}
+                                        onChange={(e) => setForceRefresh(e.target.checked)}
+                                        className="rounded border-border bg-white text-accent focus:ring-0 cursor-pointer"
+                                    />
+                                    <span>Force university re-scrape</span>
+                                </label>
+                            </div>
+
+                            {/* Recent Searches Bar (if any) */}
+                            {recentSearches.length > 0 && (
+                                <div className="pt-2 border-t border-border flex items-center gap-2 overflow-x-auto text-xs font-mono">
+                                    <span className="text-[10px] text-text-muted uppercase tracking-wider flex items-center gap-1 shrink-0 font-semibold">
+                                        <History className="w-3 h-3 text-accent" /> Recent:
+                                    </span>
+                                    {recentSearches.map((rec) => (
+                                        <button
+                                            key={rec.htno}
+                                            type="button"
+                                            onClick={() => handleQuickRoll(rec.htno)}
+                                            className="px-2.5 py-1 rounded-md bg-surface-subtle hover:bg-accent-blue-subtle border border-border text-[11px] text-text-secondary hover:text-accent transition-colors cursor-pointer shrink-0 flex items-center gap-1.5 hover:border-accent-blue-border"
+                                        >
+                                            <span className="text-accent font-bold">{rec.htno}</span>
+                                            {rec.cgpa && rec.cgpa > 0 && (
+                                                <span className="text-emerald-600 font-semibold text-[10px]">({rec.cgpa.toFixed(2)})</span>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* MODE 2: PDF Memo Scanner */}
+                    {intakeMode === 'pdf' && (
+                        <div
+                            onClick={triggerFileSelect}
+                            className="p-8 rounded-2xl border-2 border-dashed border-border-strong hover:border-accent bg-surface-subtle hover:bg-white transition-all cursor-pointer text-center relative overflow-hidden group space-y-4 shadow-xs"
+                        >
+                            {isProcessing && <div className="scanner-laser" />}
+                            <div className="w-14 h-14 rounded-2xl bg-accent-blue-subtle border border-accent-blue-border flex items-center justify-center mx-auto text-accent group-hover:scale-105 transition-transform">
+                                <FileUp className="w-7 h-7" />
+                            </div>
+                            <div className="space-y-1">
+                                <h3 className="text-base font-bold text-text-primary">Click or drag & drop result memo PDFs</h3>
+                                <p className="text-xs text-text-secondary max-w-md mx-auto">
+                                    Upload single semester result cards or consolidated multi-semester grade sheets. Instant client-side parsing without storing documents.
+                                </p>
+                            </div>
+                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-border text-[11px] font-mono text-text-muted shadow-2xs">
+                                <span>PDF Format Supported</span>
+                                <span>·</span>
+                                <span>Batch Multi-Semester Upload</span>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="import-meta no-print">
-                        <span><i /> Auto-fetch</span>
-                        <span><i style={{ background: 'var(--accent-red-bright)' }} /> PDF parse</span>
-                        <span><i style={{ background: 'var(--accent-green)' }} /> Session-only</span>
+                        <span><i style={{ background: 'var(--color-primary)' }}></i> Instant University Cache</span>
+                        <span><i style={{ background: 'var(--color-warning)' }}></i> PDF Memo Parsing</span>
+                        <span><i style={{ background: 'var(--color-success)' }}></i> 100% Private Session</span>
                     </div>
                 </div>
 
                 {/* Ambient drag drop overlay */}
                 {isDragging && (
-                    <div className="absolute inset-0 bg-black/90 backdrop-blur-lg flex items-center justify-center z-20 pointer-events-none border-2 border-dashed border-[var(--accent-red)] rounded-[var(--radius-xl)] animate-pulse">
-                        <div className="text-center space-y-4">
-                            <div className="w-20 h-20 rounded-[24px] bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto shadow-2xl">
-                                <FileUp className="w-10 h-10 text-primary" />
+                    <div className="absolute inset-0 bg-white/95 backdrop-blur-sm flex items-center justify-center z-20 pointer-events-none border-2 border-dashed border-accent rounded-xl">
+                        <div className="text-center space-y-3">
+                            <div className="w-12 h-12 rounded-lg bg-accent-blue-subtle border border-accent-blue-border flex items-center justify-center mx-auto">
+                                <FileUp className="w-6 h-6 text-accent" />
                             </div>
                             <div>
-                                <p className="font-heading font-black text-xl text-white">Ready to load grades!</p>
-                                <p className="text-xs text-text-muted mt-1">Drop the PDFs to begin extraction</p>
+                                <p className="font-semibold text-sm text-text-primary">Release to upload memo PDFs</p>
+                                <p className="text-xs text-text-muted mt-0.5">Supports single or multi-semester files</p>
                             </div>
                         </div>
                     </div>
                 )}
+            </div>
+
+            {/* Platform Capabilities Bento Grid (Showcases key features below intake) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+                <div className="glass-card-interactive p-5 rounded-xl space-y-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600">
+                        <Trophy className="w-4 h-4" />
+                    </div>
+                    <h3 className="text-sm font-bold text-text-primary">Class & Batch Leaderboard</h3>
+                    <p className="text-xs text-text-secondary leading-relaxed">
+                        Benchmark your CGPA against all 60–120 students in your section with instant topper podiums and pass rates.
+                    </p>
+                </div>
+
+                <div className="glass-card-interactive p-5 rounded-xl space-y-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600">
+                        <Flame className="w-4 h-4" />
+                    </div>
+                    <h3 className="text-sm font-bold text-text-primary">Time-to-Time Imp Questions</h3>
+                    <p className="text-xs text-text-secondary leading-relaxed">
+                        Curated 10-mark repeated questions, evaluator blueprints, and 1-page printable cram sheets for exams.
+                    </p>
+                </div>
+
+                <div className="glass-card-interactive p-5 rounded-xl space-y-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
+                        <ShieldCheck className="w-4 h-4" />
+                    </div>
+                    <h3 className="text-sm font-bold text-text-primary">Grace Marks & Backlog Plan</h3>
+                    <p className="text-xs text-text-secondary leading-relaxed">
+                        Simulate official JNTUH 0.15% grace marks rules and subject exemption eligibility for degree conferment.
+                    </p>
+                </div>
+
+                <div className="glass-card-interactive p-5 rounded-xl space-y-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-accent">
+                        <Sparkles className="w-4 h-4" />
+                    </div>
+                    <h3 className="text-sm font-bold text-text-primary">Spotify-Style Journey Wrapped</h3>
+                    <p className="text-xs text-text-secondary leading-relaxed">
+                        Experience your 4-year engineering comeback arc, toughest semesters, and export shareable visual milestone cards.
+                    </p>
+                </div>
             </div>
         </>
     );

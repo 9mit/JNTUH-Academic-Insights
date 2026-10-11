@@ -18,6 +18,11 @@ import AppShell from './components/layout/AppShell';
 import PrintableTranscript from './components/PrintableTranscript';
 import CreditProgressDashboard from './components/CreditProgressDashboard';
 import VaultUnlockBanner from './components/VaultUnlockBanner';
+import JobsPortal from './components/jobs/JobsPortal';
+import ResultContrast from './components/ResultContrast';
+import AcademicCalendarsHub from './components/AcademicCalendarsHub';
+import ClassResultExplorer from './components/ClassResultExplorer';
+import AcademicJourneyWrapped from './components/AcademicJourneyWrapped';
 
 const TAB_LABELS: Record<TabType, string> = {
   input: 'Import Results',
@@ -28,6 +33,11 @@ const TAB_LABELS: Record<TabType, string> = {
   credits: 'Credits',
   notifications: 'Updates',
   backlog: 'Backlog Plan',
+  jobs: 'Opportunities',
+  compare: 'Compare Results',
+  calendars: 'Calendars',
+  class: 'Class Leaderboard',
+  journey: 'Journey & Wrapped',
   help: 'Help',
 };
 
@@ -46,6 +56,25 @@ const HASH_TO_TAB: Record<string, TabType> = {
   library: 'notes',
   updates: 'notifications',
   notifications: 'notifications',
+  notices: 'notifications',
+  update: 'jobs',
+  jobs: 'jobs',
+  opportunities: 'jobs',
+  careers: 'jobs',
+  compare: 'compare',
+  contrast: 'compare',
+  benchmark: 'compare',
+  calendars: 'calendars',
+  calendar: 'calendars',
+  almanac: 'calendars',
+  class: 'class',
+  batch: 'class',
+  leaderboard: 'class',
+  section: 'class',
+  journey: 'journey',
+  wrapped: 'journey',
+  odyssey: 'journey',
+  story: 'journey',
   help: 'help',
 };
 
@@ -58,6 +87,11 @@ const TAB_TO_HASH: Record<TabType, string> = {
   predictions: 'goals',
   notes: 'notes',
   notifications: 'updates',
+  jobs: 'update',
+  compare: 'compare',
+  calendars: 'calendars',
+  class: 'class',
+  journey: 'journey',
   help: 'help',
 };
 
@@ -135,6 +169,16 @@ function AppContent() {
         return <CreditProgressDashboard />;
       case 'notifications':
         return <NotificationsHub />;
+      case 'jobs':
+        return <JobsPortal />;
+      case 'compare':
+        return <ResultContrast />;
+      case 'calendars':
+        return <AcademicCalendarsHub />;
+      case 'class':
+        return <ClassResultExplorer onSelectStudent={() => setActiveTab('compare')} />;
+      case 'journey':
+        return <AcademicJourneyWrapped />;
       case 'backlog':
         return (
           <div className="space-y-8">
@@ -169,10 +213,10 @@ function AppContent() {
 }
 
 const toastStyle = {
-  background: 'rgba(0, 0, 0, 0.92)',
-  color: '#fafafa',
-  border: '1px solid rgba(255,255,255,0.08)',
-  backdropFilter: 'blur(16px)',
+  background: '#FFFFFF',
+  color: '#111318',
+  border: '1px solid #E8EAF0',
+  boxShadow: '0 8px 30px rgba(17, 19, 24, 0.12), 0 1px 3px rgba(17, 19, 24, 0.05)',
   borderRadius: '12px',
   fontSize: '0.8125rem',
   fontWeight: 550,
@@ -186,8 +230,8 @@ export default function App() {
         position="top-right"
         toastOptions={{
           style: toastStyle,
-          success: { iconTheme: { primary: '#22c55e', secondary: '#000000' } },
-          error: { iconTheme: { primary: '#c41e3a', secondary: '#000000' } },
+          success: { iconTheme: { primary: '#16a34a', secondary: '#FFFFFF' } },
+          error: { iconTheme: { primary: '#dc2626', secondary: '#FFFFFF' } },
         }}
       />
       <AppContent />

@@ -88,19 +88,19 @@ export default function SessionVaultPanel() {
   };
 
   return (
-    <div className="card p-5 space-y-4 border border-primary/20">
+    <div className="card p-5 space-y-4 border border-border bg-surface-card">
       <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-primary/15 border border-primary/25 flex items-center justify-center shrink-0">
-          <Shield className="w-5 h-5 text-primary" />
+        <div className="w-8 h-8 rounded-md bg-accent-subtle border border-accent/20 flex items-center justify-center shrink-0">
+          <Shield className="w-4 h-4 text-accent" />
         </div>
         <div className="min-w-0">
-          <h3 className="text-sm font-bold text-white font-heading">Optional encrypted save</h3>
+          <h3 className="text-sm font-semibold text-text-primary">Encrypted Local Vault (Optional)</h3>
           <p className="text-xs text-text-muted mt-1 leading-relaxed">
             Default is still session-only. Opt in to keep an AES-encrypted copy on this device, unlocked with your PIN.
             Grades never leave your browser for this vault.
           </p>
           {optedIn && vaultExists && savedAt && (
-            <p className="text-[11px] text-emerald-400 mt-2">
+            <p className="text-[11px] text-emerald-600 font-medium mt-2">
               Vault active · saved {new Date(savedAt).toLocaleString()}
             </p>
           )}
@@ -141,7 +141,7 @@ export default function SessionVaultPanel() {
           type="button"
           disabled={busy || !vaultExists}
           onClick={handleForget}
-          className="btn-secondary text-xs h-10 px-3 inline-flex items-center justify-center gap-1.5 text-rose-300 disabled:opacity-40"
+          className="btn-secondary text-xs h-10 px-3 inline-flex items-center justify-center gap-1.5 text-rose-700 hover:text-rose-800 disabled:opacity-40"
         >
           <Trash2 className="w-3.5 h-3.5" />
           Forget vault

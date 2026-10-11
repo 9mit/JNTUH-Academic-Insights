@@ -34,6 +34,7 @@ from backend.shared import (
 from backend.history_merge import (
     merge_academic_histories,
     normalize_htno_list,
+    sanitize_jntuh_htno,
     annotate_same_ht_career,
     dedupe_subjects_best_attempt,
     consolidate_semester_rows,
@@ -51,6 +52,22 @@ from backend.notifications import fetch_notifications, filter_notifications
 from backend.calendars import fetch_calendars
 from backend.grace_marks import check_grace_eligibility
 from backend.study_packs import get_syllabus_gap, get_pyq_pack, list_pyq_packs
+from backend.important_questions import (
+    query_important_questions,
+    get_cram_sheet,
+    get_filters_meta,
+)
+from backend.jobs_scheduler import (
+    start_jobs_scheduler,
+    stop_jobs_scheduler,
+    trigger_manual_sync,
+    get_scheduler_status,
+)
+from backend.jobs_db import (
+    query_jobs,
+    get_job_by_id,
+    submit_application,
+)
 from backend.security import (
     check_rate_limit,
     get_cors_origins,
@@ -80,6 +97,7 @@ SYLLABUS_PATH = BASE_DIR / "backend" / "syllabus.json"
 # Notes Directories
 NOTES_BASE_PATH = BASE_DIR
 R18_NOTES_PATH = NOTES_BASE_PATH / "JNTUH NOTES"
+NOTES_ROOT_DIR = R18_NOTES_PATH
 R22_NOTES_PATH = NOTES_BASE_PATH / "JNTUH-CSE-BTech-Notes-R22-main" / "JNTUH-CSE-BTech-Notes-R22-main"
 import tempfile
 UPLOAD_DIR = Path(tempfile.gettempdir()) / "jntuh_pending_notes"
@@ -164,11 +182,16 @@ async def lifespan(app: FastAPI):
 
     # Production security: fail fast if secrets are missing
     validate_production_config()
+
+    # Start 3-hour automated background jobs collection scheduler
+    start_jobs_scheduler()
+
     logger.info("Application startup complete. Lifespan triggered successfully.")
     
     yield  # App runs here
 
     # Cleanup
+    stop_jobs_scheduler()
     if KEEP_ALIVE_TASK:
         KEEP_ALIVE_TASK.cancel()
     if THREAD_POOL:
@@ -344,6 +367,10 @@ class HallTicketRequest(BaseModel):
         description="Queue dhethi hardRefresh before fetch so post-detention exams are not stale",
     )
 
+class BatchHallTicketRequest(BaseModel):
+    htnos: List[str] = Field(..., description="List of 10-character Hall Ticket Numbers (max 80)")
+    regulation: Optional[str] = Field(default=None, description="Target regulation filter, e.g. R18, R22")
+
 class SemesterSGPARecord(BaseModel):
     year: int = Field(..., ge=1, le=4)
     sem: int = Field(..., ge=1, le=2)
@@ -484,7 +511,7 @@ def trigger_dhethi_hard_refresh(htno: str) -> bool:
         return False
 
 
-def fetch_dhethi_json(path: str, htno: str, max_attempts: int = 15) -> Optional[dict]:
+def fetch_dhethi_json(path: str, htno: str, max_attempts: int = 6) -> Optional[dict]:
     """
     Poll dhethi JSON endpoint until 200 or attempts exhausted.
     Returns None on soft failure (empty / still queued); raises HTTPException on hard 5xx-style failures.
@@ -495,7 +522,7 @@ def fetch_dhethi_json(path: str, htno: str, max_attempts: int = 15) -> Optional[
 
     for attempt in range(max_attempts):
         try:
-            resp = requests.get(url, headers=headers, timeout=30)
+            resp = requests.get(url, headers=headers, timeout=15)
             last_status = resp.status_code
             if resp.status_code == 200:
                 data = resp.json()
@@ -510,21 +537,21 @@ def fetch_dhethi_json(path: str, htno: str, max_attempts: int = 15) -> Optional[
                     attempt + 1,
                     max_attempts,
                 )
-                time.sleep(3)
+                time.sleep(1.5)
                 continue
             if resp.status_code == 404:
                 return None
             logger.error("[API] %s error %s for %s", path, resp.status_code, mask_hall_ticket(htno))
             if attempt == max_attempts - 1:
                 raise HTTPException(status_code=502, detail="Failed to fetch data from remote server.")
-            time.sleep(3)
+            time.sleep(1.5)
         except HTTPException:
             raise
         except requests.exceptions.RequestException as e:
             logger.error("[API] %s request exception for %s: %s", path, mask_hall_ticket(htno), e)
             if attempt == max_attempts - 1:
                 return None
-            time.sleep(3)
+            time.sleep(1.5)
 
     logger.warning(
         "[API] %s exhausted polls for %s (last_status=%s)",
@@ -543,28 +570,30 @@ def fetch_api_and_parse(htno: str, force_refresh: bool = True) -> dict:
     Academic overlays official SGPA/CGPA; credits checker overlays earned credits.
     Optional hardRefresh forces dhethi to re-scrape before we read.
     """
+    # Auto-sanitize OCR / typing mistakes (e.g. letter 'O' instead of digit '0' in branch/year/college)
+    htno = sanitize_jntuh_htno(htno)
+
     refreshed = False
     if force_refresh:
         refreshed = trigger_dhethi_hard_refresh(htno)
         if refreshed:
-            # Give the upstream worker a moment to start before we poll
-            time.sleep(2)
+            time.sleep(1.5)
 
-    attempts = 20 if force_refresh else 15
+    attempts = 6 if force_refresh else 5
 
     # Prefer attempt history first — this is what contains post-detention exams
     all_json = fetch_dhethi_json("/api/getAllResult", htno, max_attempts=attempts)
-    academic_json = fetch_dhethi_json("/api/getAcademicResult", htno, max_attempts=attempts)
-    credits_json = fetch_dhethi_json("/api/getCreditsChecker", htno, max_attempts=8)
-
-    # If hardRefresh ran but both payloads are empty, one more short wait + retry
-    if force_refresh and not academic_json and not all_json:
-        time.sleep(4)
-        all_json = fetch_dhethi_json("/api/getAllResult", htno, max_attempts=10)
-        academic_json = fetch_dhethi_json("/api/getAcademicResult", htno, max_attempts=10)
+    
+    # If all_json was queued / not found, limit academic_json attempts to avoid hanging
+    acad_attempts = attempts if all_json else 2
+    academic_json = fetch_dhethi_json("/api/getAcademicResult", htno, max_attempts=acad_attempts)
+    credits_json = fetch_dhethi_json("/api/getCreditsChecker", htno, max_attempts=3) if (all_json or academic_json) else None
 
     if not academic_json and not all_json:
-        raise HTTPException(status_code=404, detail="No results found or Invalid Hall Ticket Number.")
+        raise HTTPException(
+            status_code=404,
+            detail=f"No results found for hall ticket '{htno}'. Please verify the 10-character hall ticket number."
+        )
 
     detected_regulation = detect_regulation(htno)
     subjects: List[dict] = []
@@ -645,6 +674,7 @@ def fetch_api_and_parse(htno: str, force_refresh: bool = True) -> dict:
     if not subjects and not semesters:
         raise HTTPException(status_code=404, detail="No results found or Invalid Hall Ticket Number.")
 
+    all_raw_attempts = list(subjects)
     subjects = dedupe_subjects_best_attempt(subjects)
     semesters = consolidate_semester_rows(semesters)
 
@@ -665,6 +695,7 @@ def fetch_api_and_parse(htno: str, force_refresh: bool = True) -> dict:
         "htno": htno,
         "student_name": student_name,
         "subjects": subjects,
+        "all_attempts": all_raw_attempts,
         "semesters": semesters,
         "total_subjects": len(subjects),
         "official_cgpa": official_cgpa,
@@ -684,6 +715,7 @@ def fetch_api_and_parse(htno: str, force_refresh: bool = True) -> dict:
     }
 
     annotated = annotate_same_ht_career(raw_result)
+    annotated["all_attempts"] = all_raw_attempts
     annotated["student_status"] = get_student_status_from_semesters(
         annotated["semesters"], annotated["subjects"], annotated["regulation"]
     )
@@ -888,6 +920,74 @@ async def fetch_by_hall_ticket(request: HallTicketRequest):
     except Exception as e:
         logger.exception("Unexpected error processing hall ticket fetch")
         raise HTTPException(status_code=500, detail=f"Failed to fetch results: {str(e)}")
+ 
+ 
+@app.post("/fetch/batch")
+async def fetch_batch_results(request: BatchHallTicketRequest):
+    clean_htnos = []
+    for h in request.htnos:
+        ch = str(h).strip().upper()
+        if re.match(r"^[0-9A-Z]{10}$", ch) and ch not in clean_htnos:
+            clean_htnos.append(ch)
+        if len(clean_htnos) >= 80:
+            break
+
+    if not clean_htnos:
+        raise HTTPException(
+            status_code=400,
+            detail="No valid 10-character hall ticket numbers provided."
+        )
+
+    loop = asyncio.get_running_loop()
+
+    def resolve_student_summary(ht: str):
+        try:
+            raw = fetch_api_and_parse(ht, force_refresh=False)
+            target_reg = request.regulation or raw.get("regulation") or detect_regulation(ht)
+            filtered = filter_student_result_by_regulation(raw, target_reg) or raw
+            subs = filtered.get("subjects") or []
+            backlogs = len([s for s in subs if s.get("grade") in ("F", "Ab", "AB")])
+            earned_credits = sum([
+                float(s.get("credits") or 0) for s in subs
+                if s.get("grade") not in ("F", "Ab", "AB")
+            ])
+            cgpa = filtered.get("official_cgpa") or filtered.get("cgpa") or 0.0
+            percentage = filtered.get("percentage") or (round((float(cgpa) - 0.5) * 10, 1) if cgpa else 0.0)
+
+            return {
+                "htno": ht,
+                "student_name": filtered.get("student_name") or f"Student {ht[-3:]}",
+                "cgpa": round(float(cgpa), 2) if cgpa else 0.0,
+                "percentage": round(float(percentage), 1),
+                "earned_credits": round(float(earned_credits), 1),
+                "backlogs_count": int(backlogs),
+                "total_subjects": len(subs),
+                "semesters_count": len(filtered.get("semesters") or []),
+                "status": "success"
+            }
+        except Exception as e:
+            return {
+                "htno": ht,
+                "student_name": None,
+                "cgpa": 0.0,
+                "percentage": 0.0,
+                "earned_credits": 0.0,
+                "backlogs_count": 0,
+                "total_subjects": 0,
+                "semesters_count": 0,
+                "status": "not_found",
+                "error": str(e)
+            }
+
+    tasks = [loop.run_in_executor(THREAD_POOL, lambda h=ht: resolve_student_summary(h)) for ht in clean_htnos]
+    results = await asyncio.gather(*tasks)
+
+    resolved = [r for r in results if r["status"] == "success"]
+    return {
+        "total_requested": len(clean_htnos),
+        "total_resolved": len(resolved),
+        "items": results
+    }
 
 
 @app.post("/analyze/pdf")
@@ -1244,6 +1344,423 @@ async def verify_share(token: str):
     if not data:
         raise HTTPException(status_code=400, detail="Invalid or expired share token")
     return {"data": data}
+
+
+# ==========================================
+# STUDY & SYLLABUS INTELLIGENCE APIs
+# ==========================================
+@app.get("/api/syllabus/blueprint")
+async def get_subject_blueprint(name: str = "", code: str = "", regulation: str = ""):
+    """Return unit-level exam blueprint and PYQ pack for a specific course."""
+    gap = get_syllabus_gap(subject_name=name, subject_code=code)
+    pack = get_pyq_pack(subject_name=name, subject_code=code, regulation=regulation)
+    return {
+        "blueprint": gap,
+        "pyq_pack": pack,
+    }
+
+
+# ==========================================
+# JOBS & OPPORTUNITIES APIs
+# ==========================================
+class JobApplicationRequest(BaseModel):
+    student_name: Optional[str] = None
+    applicant_name: Optional[str] = None
+    email: str
+    phone: Optional[str] = ""
+    hall_ticket: Optional[str] = None
+    degree: Optional[str] = None
+    degree_branch: Optional[str] = None
+    graduation_year: Optional[str] = None
+    cgpa: Optional[float] = None
+    resume_url: Optional[str] = None
+    portfolio_url: Optional[str] = None
+    cover_note: Optional[str] = None
+
+
+@app.get("/api/jobs")
+async def list_jobs(
+    q: Optional[str] = None,
+    workplace_type: Optional[str] = None,
+    employment_type: Optional[str] = None,
+    experience_level: Optional[str] = None,
+    location: Optional[str] = None,
+    apply_type: Optional[str] = None,
+    sort_by: str = "published_at_desc",
+    page: int = 1,
+    page_size: int = 20,
+):
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        THREAD_POOL,
+        lambda: query_jobs(
+            q=q,
+            workplace_type=workplace_type,
+            employment_type=employment_type,
+            experience_level=experience_level,
+            location=location,
+            apply_type=apply_type,
+            sort_by=sort_by,
+            page=page,
+            page_size=page_size,
+        )
+    )
+
+
+@app.post("/api/jobs/sync")
+async def sync_jobs_now():
+    return await trigger_manual_sync()
+
+
+@app.get("/api/jobs/sync-status")
+async def get_jobs_sync_status():
+    return get_scheduler_status()
+
+
+@app.get("/api/jobs/{job_id}")
+async def get_job_detail(job_id: str):
+    loop = asyncio.get_event_loop()
+    job = await loop.run_in_executor(THREAD_POOL, lambda: get_job_by_id(job_id))
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found or has expired")
+    return job
+
+
+@app.post("/api/jobs/{job_id}/apply")
+async def apply_for_job(job_id: str, body: JobApplicationRequest):
+    data = body.dict()
+    data["job_id"] = job_id
+    loop = asyncio.get_event_loop()
+    try:
+        res = await loop.run_in_executor(THREAD_POOL, lambda: submit_application(data))
+        return res
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Error submitting job application: {e}")
+        raise HTTPException(status_code=500, detail="Failed to submit application")
+
+
+# ==========================================
+# MODEL CONTEXT PROTOCOL (MCP) & COPILOT APIs
+# ==========================================
+class MCPQueryRequest(BaseModel):
+    query: str
+    htno: Optional[str] = None
+    regulation: Optional[str] = None
+    subjects: Optional[List[Dict[str, Any]]] = None
+    semesters: Optional[List[Dict[str, Any]]] = None
+    cgpa: Optional[float] = None
+
+
+@app.get("/api/mcp/manifest")
+async def get_mcp_manifest():
+    """Expose standardized Model Context Protocol (MCP) server metadata and tool schemas."""
+    return {
+        "name": "jntuh-academic-insights",
+        "title": "JNTUH Academic Insights MCP Server",
+        "version": "2.0.0",
+        "description": "Model Context Protocol (MCP) server providing live JNTUH academic result auditing, 0.15% grace marks evaluation, official exam blueprints, PYQs, and verified career listings.",
+        "tools": [
+            {
+                "name": "lookup_student_results",
+                "description": "Look up consolidated JNTUH exam results, SGPA/CGPA trajectory, earned credits, and backlogs by hall ticket number.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "htno": {"type": "string", "description": "10-character JNTUH hall ticket number (e.g. 21071A0501)"},
+                        "regulation": {"type": "string", "description": "Academic regulation code (e.g. R18, R22)"}
+                    },
+                    "required": ["htno"]
+                }
+            },
+            {
+                "name": "check_grace_and_credit_exemption",
+                "description": "Verify eligibility for JNTUH 0.15% Grace Marks Ordinance and R18/R16 Credit Exemption policy for graduation clearance.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "subjects": {"type": "array", "description": "List of subjects with subject_code, grade, external, total, credits"},
+                        "regulation": {"type": "string", "description": "Regulation scheme (R18, R22, etc.)"}
+                    },
+                    "required": ["subjects"]
+                }
+            },
+            {
+                "name": "get_exam_blueprint_and_pyq",
+                "description": "Retrieve unit-wise examination weight hints, focus areas, examiner strategies, and PYQ paper archives for any JNTUH course.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "subject_name": {"type": "string", "description": "Official JNTUH subject name (e.g. Compiler Design, Machine Learning)"},
+                        "subject_code": {"type": "string", "description": "JNTUH course code (e.g. 156AH)"},
+                        "regulation": {"type": "string", "description": "Regulation (R18, R22)"}
+                    }
+                }
+            },
+            {
+                "name": "get_academic_calendars",
+                "description": "Fetch official JNTUH academic calendars, instructional weeks, mid exam dates, and semester commencement milestones.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "degree": {"type": "string", "description": "Degree filter: B.Tech, M.Tech, MBA, MCA, B.Pharm"}
+                    }
+                }
+            },
+            {
+                "name": "query_student_jobs",
+                "description": "Query verified fresher job opportunities, campus drives, and software engineering internships.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "q": {"type": "string", "description": "Search keyword (role, tech stack, company)"},
+                        "workplace_type": {"type": "string", "description": "Remote, Hybrid, Onsite"},
+                        "experience_level": {"type": "string", "description": "Internship, Entry-level, Fresher"}
+                    }
+                }
+            }
+        ]
+    }
+
+
+@app.post("/api/mcp/query")
+async def query_academic_copilot(body: MCPQueryRequest):
+    """Direct plain-English academic intelligence processor."""
+    q = body.query.strip().lower()
+    reg = (body.regulation or "R18").upper()
+    subjects = body.subjects or []
+
+    # 1. Grace Marks / Ordinance Question
+    if any(k in q for k in ["grace", "0.15", "exemption", "exempt", "clearance", "pass with grace"]):
+        eligibility = check_grace_eligibility(subjects, reg)
+        if eligibility["can_clear_with_grace"]:
+            msg = f"Eligible for 0.15% Grace Marks Ordinance! You have {eligibility['eligible_count']} backlog(s) that can be cleared within your {eligibility['max_grace_marks_quota']}-mark university quota."
+        elif eligibility.get("can_clear_with_exemption"):
+            msg = f"Eligible for Credit Exemption Ordinance under {reg}! You can drop up to {eligibility.get('max_exempt_credits', 0)} elective credits to secure your Provisional Certificate."
+        else:
+            reasons = "; ".join(eligibility.get("reasons", ["Degree criteria not met."]))
+            msg = f"Currently ineligible for Grace Marks / Credit Exemption under {reg}: {reasons}"
+
+        return {
+            "type": "grace_ordinance",
+            "answer": msg,
+            "data": eligibility
+        }
+
+    # 2. Exam Blueprint / PYQs / Course Study Guide
+    if any(k in q for k in ["blueprint", "pyq", "syllabus", "important", "exam tips", "question paper"]):
+        # Extract potential subject words
+        words = [w for w in re.findall(r"[a-zA-Z]{3,}", q) if w not in ["blueprint", "syllabus", "exam", "tips", "paper", "give", "show", "what", "jntuh", "important"]]
+        subj_query = " ".join(words) or "Machine Learning"
+        gap = get_syllabus_gap(subject_name=subj_query)
+        pack = get_pyq_pack(subject_name=subj_query, regulation=reg)
+
+        return {
+            "type": "exam_blueprint",
+            "answer": f"Found exam blueprint and PYQ pack for course matching '{subj_query}'. Units, focus areas, and previous papers loaded below.",
+            "data": {
+                "blueprint": gap,
+                "pyq_pack": pack
+            }
+        }
+
+    # 3. Calendar & Milestones
+    if any(k in q for k in ["calendar", "mid", "exam date", "timetable", "schedule", "commencement"]):
+        calendars = fetch_calendars()
+        return {
+            "type": "calendars",
+            "answer": f"Found {len(calendars)} official university academic schedules and milestone dates.",
+            "data": calendars[:6]
+        }
+
+    # 4. Jobs / Careers
+    if any(k in q for k in ["job", "career", "internship", "hiring", "fresher", "placement"]):
+        jobs_res = query_jobs(page_size=5)
+        return {
+            "type": "jobs",
+            "answer": f"Loaded {jobs_res.get('total_count', 0)} verified student job openings matching your query.",
+            "data": jobs_res.get("items", [])
+        }
+
+    # Default Academic Overview Audit
+    backlogs = [s for s in subjects if s.get("grade") in ("F", "Ab", "AB")]
+    earned_creds = sum(float(s.get("credits") or 0) for s in subjects if s.get("grade") not in ("F", "Ab", "AB"))
+
+    return {
+        "type": "academic_audit",
+        "answer": f"Audit complete: Candidate has {len(backlogs)} pending backlog(s), {earned_creds:.1f} earned credits recorded under {reg}. Ask specifically about grace marks, study blueprints, calendars, or job openings.",
+        "data": {
+            "backlogs_count": len(backlogs),
+            "earned_credits": earned_creds,
+            "regulation": reg
+        }
+    }
+
+
+# ==========================================
+# STUDY LIBRARY, NOTES & IMPORTANT QUESTIONS APIs
+# ==========================================
+NOTES_ROOT_DIR = Path(__file__).parent / "JNTUH NOTES"
+
+class StudyTipRequest(BaseModel):
+    subject_name: str
+    regulation: Optional[str] = "R22"
+    branch: Optional[str] = "CSE"
+    semester: Optional[str] = "1-1"
+    exam_date: Optional[str] = None
+    student_tip: Optional[str] = None
+
+
+@app.get("/api/study/important-questions")
+async def get_study_important_questions(
+    regulation: str = "R22",
+    branch: str = "CSE",
+    semester: str = "1-1",
+    subject: str = "",
+    unit: Optional[int] = None,
+    high_prob_only: bool = False,
+    search: str = ""
+):
+    """Retrieve time-to-time unit-wise high-probability important questions with evaluator blueprints."""
+    return query_important_questions(
+        regulation=regulation,
+        branch=branch,
+        semester=semester,
+        subject_query=subject,
+        unit=unit,
+        high_prob_only=high_prob_only,
+        search=search
+    )
+
+
+@app.get("/api/study/cram-sheet")
+async def get_study_cram_sheet(
+    subject: str = "MATRICES AND CALCULUS",
+    regulation: str = "R22"
+):
+    """Generate high-yield top-10 cram sheet for night-before revision."""
+    return get_cram_sheet(subject_query=subject, regulation=regulation)
+
+
+@app.get("/api/study/filters")
+async def get_study_filters():
+    """Retrieve catalog options, available regulations, branches, and semesters."""
+    return get_filters_meta()
+
+
+@app.post("/api/study/request")
+async def submit_study_request(body: StudyTipRequest):
+    """Accept student question requests or exam tips for upcoming semester exams."""
+    req_file = Path(__file__).parent / "backend" / "data" / "study_requests.json"
+    req_file.parent.mkdir(parents=True, exist_ok=True)
+    existing = []
+    if req_file.exists():
+        try:
+            with open(req_file, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+        except Exception:
+            existing = []
+    
+    new_entry = {
+        **body.dict(),
+        "received_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "status": "queued_for_review"
+    }
+    existing.append(new_entry)
+    with open(req_file, "w", encoding="utf-8") as f:
+        json.dump(existing, f, indent=2)
+
+    return {
+        "success": True,
+        "message": f"Question drop request recorded for {body.subject_name}. Our academic review team will prioritize this for the next drop.",
+        "request_id": f"REQ-{len(existing)}"
+    }
+
+
+@app.get("/api/pyq/packs")
+async def get_pyq_packs_api():
+    """Retrieve all curated previous year question paper packs."""
+    packs = list_pyq_packs()
+    return {"packs": packs}
+
+
+@app.get("/notes/catalog")
+async def get_notes_catalog():
+    """Return local notes catalog scanned directly from the codebase filesystem."""
+    reg_r18 = {
+        "name": "R18",
+        "path": "R18",
+        "years": []
+    }
+    
+    if NOTES_ROOT_DIR.exists():
+        for yr_dir in sorted(NOTES_ROOT_DIR.iterdir()):
+            if not yr_dir.is_dir() or yr_dir.name.startswith("."):
+                continue
+            yr_obj = {
+                "name": yr_dir.name,
+                "path": yr_dir.name,
+                "semesters": []
+            }
+            for sem_dir in sorted(yr_dir.iterdir()):
+                if not sem_dir.is_dir() or sem_dir.name.startswith("."):
+                    continue
+                sem_obj = {
+                    "name": sem_dir.name,
+                    "path": f"{yr_dir.name}/{sem_dir.name}",
+                    "subjects": []
+                }
+                for sub_dir in sorted(sem_dir.iterdir()):
+                    if not sub_dir.is_dir() or sub_dir.name.startswith("."):
+                        continue
+                    sub_obj = {
+                        "name": sub_dir.name,
+                        "path": f"{yr_dir.name}/{sem_dir.name}/{sub_dir.name}",
+                        "files": []
+                    }
+                    for f in sorted(sub_dir.iterdir()):
+                        if f.is_file() and not f.name.startswith("."):
+                            rel = f"{yr_dir.name}/{sem_dir.name}/{sub_dir.name}/{f.name}"
+                            sub_obj["files"].append({
+                                "name": f.name,
+                                "filename": f.name,
+                                "path": rel,
+                                "size": f.stat().st_size
+                            })
+                    if sub_obj["files"]:
+                        sem_obj["subjects"].append(sub_obj)
+                if sem_obj["subjects"]:
+                    yr_obj["semesters"].append(sem_obj)
+            if yr_obj["semesters"]:
+                reg_r18["years"].append(yr_obj)
+
+    return {"regulations": [reg_r18]}
+
+
+@app.get("/notes/download")
+async def download_note_file(path: str):
+    """Safely stream lecture note PDF files from JNTUH NOTES directory."""
+    clean_path = path.replace("\\", "/")
+    if clean_path.startswith("R18/"):
+        clean_path = clean_path[4:]
+    
+    target = (NOTES_ROOT_DIR / clean_path).resolve()
+    
+    # Path traversal safety check
+    try:
+        target.relative_to(NOTES_ROOT_DIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Access denied: Invalid file path.")
+
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Requested lecture note file not found.")
+
+    return FileResponse(
+        path=str(target),
+        filename=target.name,
+        media_type="application/pdf"
+    )
 
 
 # ==========================================

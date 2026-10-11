@@ -513,16 +513,55 @@ def annotate_same_ht_career(result: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def sanitize_jntuh_htno(raw: str) -> str:
+    """
+    Intelligently normalize JNTUH 10-character hall ticket number:
+    - Strips whitespace and forces uppercase.
+    - Corrects common OCR / typing confusion between digit '0' and letter 'O':
+      * JNTUH format: [YY][COLLEGE:2][DEGREE:1][SERIES:1][BRANCH:2][ROLL:2]
+      * Year (indices 0, 1): always digits. Replace 'O' with '0'.
+      * Degree (index 4): always digit (1, 5). Replace 'O' with '1'.
+      * Branch code (indices 6, 7): ALWAYS 2 digits (e.g. 05, 04, 02, 01, 12, 66, 67).
+        Replace 'O' with '0' in branch positions (e.g. 'AO5' -> 'A05').
+      * College code (index 3): if 'CO' with degree digit, replace with 'C0'.
+    """
+    s = (raw or "").strip().upper()
+    if len(s) != 10:
+        return s
+
+    chars = list(s)
+    # 1. Year digits (pos 0, 1)
+    if chars[0] in ('O', 'o'): chars[0] = '0'
+    if chars[1] in ('O', 'o'): chars[1] = '0'
+
+    # 2. College code ending in O when degree is digit (e.g. CO1A -> C01A)
+    if chars[3] in ('O', 'o') and chars[4] in ('1', '5'):
+        chars[3] = '0'
+
+    # 3. Degree digit (pos 4)
+    if chars[4] in ('O', 'o'):
+        chars[4] = '1'
+
+    # 4. Branch code (pos 6, 7): MUST BE DIGITS (e.g. 05, 04, 02, 01, 12, 66, 67)
+    if chars[5].isalpha():
+        if chars[6] in ('O', 'o'):
+            chars[6] = '0'
+        if chars[7] in ('O', 'o'):
+            chars[7] = '0'
+
+    return "".join(chars)
+
+
 def normalize_htno_list(primary: str, related: Optional[List[str]] = None) -> List[str]:
     """Parse primary (+ optional related) into unique ordered 10-char HTs (max 2)."""
     tokens: List[str] = []
     for chunk in re.split(r"[,;\s]+", (primary or "").upper()):
-        t = chunk.strip()
+        t = sanitize_jntuh_htno(chunk.strip())
         if t:
             tokens.append(t)
     for extra in related or []:
         for chunk in re.split(r"[,;\s]+", str(extra).upper()):
-            t = chunk.strip()
+            t = sanitize_jntuh_htno(chunk.strip())
             if t:
                 tokens.append(t)
 

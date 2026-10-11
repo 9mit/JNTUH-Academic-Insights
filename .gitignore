@@ -136,3 +136,10 @@ brain/
 .agent/
 _agents/
 _agent/
+
+# ======================
+# Databases & Local State
+# ======================
+*.db
+*.db-*
+*.sqlite*

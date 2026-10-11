@@ -1,8 +1,12 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Download, ChevronRight, ChevronDown, Folder, FileText, Loader2, AlertTriangle, Upload, CheckCircle, X, Plus, Users } from 'lucide-react';
+import { BookOpen, Download, ChevronRight, ChevronDown, Folder, FileText, Loader2, AlertTriangle, Upload, CheckCircle, X, Plus, Users, Search, Layers, Flame } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import SectionHeader from './ui/SectionHeader';
+import { FALLBACK_NOTES_CATALOG } from '../constants/fallbackNotes';
+import ExamBlueprintsHub from './ExamBlueprintsHub';
+import ImportantQuestionsHub from './ImportantQuestionsHub';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -64,7 +68,10 @@ export default function NotesHub() {
     const [catalog, setCatalog] = useState<NotesCatalog | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+    const [searchQuery, setSearchQuery] = useState('');
+    const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
+        new Set(['R18', '1st year', '1st year/1st sem'])
+    );
 
     // Contribution state
     const [showContribute, setShowContribute] = useState(false);
@@ -77,6 +84,7 @@ export default function NotesHub() {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [focusSubject, setFocusSubject] = useState<string | null>(null);
+    const [libraryTab, setLibraryTab] = useState<'important_questions' | 'materials' | 'blueprints'>('important_questions');
 
     const fetchCatalog = useCallback(async () => {
         setLoading(true);
@@ -85,28 +93,42 @@ export default function NotesHub() {
             // 1. Fetch Local Catalog (Backend File System)
             let builtCatalog: NotesCatalog = { regulations: [] };
             try {
-                const localResponse = await fetch(`${API_BASE_URL}/notes/catalog`);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000);
+                const localResponse = await fetch(`${API_BASE_URL}/notes/catalog`, { signal: controller.signal });
+                clearTimeout(timeoutId);
                 if (localResponse.ok) {
                     builtCatalog = await localResponse.json();
                 }
             } catch (err) {
-                console.warn("Could not fetch local notes catalog", err);
+                console.warn("Could not fetch local notes catalog, falling back to bundled dataset", err);
             }
 
-            // 2. Fetch all approved notes from Supabase
-            let notes: ContributedNote[] = [];
-            try {
-                const { data, error: dbError } = await supabase
-                    .from('notes')
-                    .select('*')
-                    .eq('status', 'approved')
-                    .order('created_at', { ascending: false });
+            // Fallback to static bundled catalog if local catalog is empty
+            if (!builtCatalog.regulations || builtCatalog.regulations.length === 0) {
+                builtCatalog = JSON.parse(JSON.stringify(FALLBACK_NOTES_CATALOG)) as NotesCatalog;
+            }
 
-                if (dbError) throw dbError;
-                if (data) notes = data as ContributedNote[];
-            } catch (err) {
-                console.warn("Supabase fetch failed. Please check VITE_SUPABASE_URL in .env.", err);
-                // We don't throw here so the local catalog can still display if it existed, and the page doesn't crash.
+            // 2. Fetch approved community notes from Supabase only if configured
+            let notes: ContributedNote[] = [];
+            if (isSupabaseConfigured) {
+                try {
+                    const timeoutPromise = new Promise<{ data: null; error: Error }>((_, reject) =>
+                        setTimeout(() => reject(new Error('Supabase timeout')), 2500)
+                    );
+                    const supabasePromise = supabase
+                        .from('notes')
+                        .select('*')
+                        .eq('status', 'approved')
+                        .order('created_at', { ascending: false });
+
+                    const result = await Promise.race([supabasePromise, timeoutPromise]);
+                    const { data, error: dbError } = result as any;
+                    if (dbError) throw dbError;
+                    if (data) notes = data as ContributedNote[];
+                } catch (err) {
+                    console.warn("Supabase fetch failed or timed out", err);
+                }
             }
 
             // 3. Merge Supabase notes into catalog structure
@@ -151,7 +173,7 @@ export default function NotesHub() {
             setCatalog(builtCatalog);
         } catch (e) {
             console.error("Fetch catalog error:", e);
-            setError(e instanceof Error ? e.message : 'Failed to load notes');
+            setCatalog(JSON.parse(JSON.stringify(FALLBACK_NOTES_CATALOG)) as NotesCatalog);
         } finally {
             setLoading(false);
         }
@@ -164,10 +186,45 @@ export default function NotesHub() {
             const focus = sessionStorage.getItem('notesFocusSubject');
             if (focus) {
                 setFocusSubject(focus);
+                setSearchQuery(focus);
                 sessionStorage.removeItem('notesFocusSubject');
             }
         } catch { /* ignore */ }
     }, []);
+
+    const matchingNotes = useMemo(() => {
+        if (!catalog || !searchQuery.trim()) return [];
+        const q = searchQuery.toLowerCase().trim();
+        const results: { file: NoteFile; breadcrumb: string; subject: string }[] = [];
+        catalog.regulations.forEach(reg => {
+            if (reg.files) {
+                reg.files.forEach(f => {
+                    if (f.name.toLowerCase().includes(q) || (f.filename && f.filename.toLowerCase().includes(q))) {
+                        results.push({ file: f, breadcrumb: reg.name, subject: reg.name });
+                    }
+                });
+            }
+            if (reg.years) {
+                reg.years.forEach(yr => {
+                    yr.semesters.forEach(sem => {
+                        sem.subjects.forEach(sub => {
+                            const matchSubject = sub.name.toLowerCase().includes(q);
+                            sub.files.forEach(f => {
+                                if (matchSubject || f.name.toLowerCase().includes(q)) {
+                                    results.push({
+                                        file: f,
+                                        breadcrumb: `${reg.name} · ${yr.name} · ${sem.name}`,
+                                        subject: sub.name,
+                                    });
+                                }
+                            });
+                        });
+                    });
+                });
+            }
+        });
+        return results;
+    }, [catalog, searchQuery]);
 
     const toggleExpand = (path: string) => {
         setExpandedPaths(prev => {
@@ -286,12 +343,12 @@ export default function NotesHub() {
 
     if (error) {
         return (
-            <div className="bg-rose-500/10 border border-rose-500/20 rounded-3xl p-8 text-center">
-                <AlertTriangle className="w-10 h-10 text-rose-400 mx-auto mb-3" />
-                <p className="text-white font-bold mb-2">Failed to Load Notes</p>
-                <p className="text-sm text-text-muted mb-4">{error}</p>
-                <button onClick={fetchCatalog} className="btn-primary text-sm">
-                    Try Again
+            <div className="bg-bg-card border border-rose-200 bg-rose-50/50 rounded-xl p-6 text-center max-w-lg mx-auto shadow-sm">
+                <AlertTriangle className="w-8 h-8 text-rose-600 mx-auto mb-3" />
+                <p className="text-text-primary font-semibold mb-1">Failed to Load Notes Catalog</p>
+                <p className="text-xs text-text-muted mb-4">{error}</p>
+                <button onClick={fetchCatalog} className="btn-primary text-xs">
+                    Retry Connection
                 </button>
             </div>
         );
@@ -300,23 +357,88 @@ export default function NotesHub() {
     return (
         <div className="space-y-6 select-none">
             {/* Header */}
-            <div
-                className="text-center mb-4"
-            >
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 mb-4">
-                    <BookOpen className="w-8 h-8 text-white" />
-                </div>
-                <h1 className="text-3xl font-black text-white mb-2">Study Library</h1>
-                <p className="text-text-muted max-w-xl mx-auto">
-                    Access and download notes organized by your semester needs
-                </p>
+            <SectionHeader
+                icon={BookOpen}
+                title="Study Library"
+                subtitle="Curated syllabus notes, unit question banks, and verified lecture materials"
+            />
+
+            {/* View Switcher Tabs */}
+            <div className="flex items-center gap-2 border-b border-border pb-3 overflow-x-auto">
+                <button
+                    type="button"
+                    onClick={() => setLibraryTab('important_questions')}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer inline-flex items-center gap-2 shrink-0 ${
+                        libraryTab === 'important_questions'
+                            ? 'bg-amber-50 border border-amber-300 text-amber-800 font-bold shadow-xs'
+                            : 'text-text-muted hover:text-text-primary'
+                    }`}
+                >
+                    <Flame className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+                    <span>Time-to-Time Imp Questions</span>
+                    <span className="px-1.5 py-0.2 rounded text-[10px] bg-amber-100 text-amber-800 font-mono font-bold">Live Drop</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setLibraryTab('materials')}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer inline-flex items-center gap-2 shrink-0 ${
+                        libraryTab === 'materials'
+                            ? 'bg-accent/10 border border-accent/30 text-accent font-semibold'
+                            : 'text-text-muted hover:text-text-primary'
+                    }`}
+                >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Lecture Notes & Memos</span>
+                    <span className="px-1.5 py-0.2 rounded text-[10px] bg-accent/20 text-accent font-mono">174 Notes</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setLibraryTab('blueprints')}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer inline-flex items-center gap-2 shrink-0 ${
+                        libraryTab === 'blueprints'
+                            ? 'bg-accent/10 border border-accent/30 text-accent font-semibold'
+                            : 'text-text-muted hover:text-text-primary'
+                    }`}
+                >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Exam Blueprints & PYQs</span>
+                    <span className="px-1.5 py-0.2 rounded text-[10px] bg-accent/20 text-accent font-mono">12 Packs</span>
+                </button>
+            </div>
+
+            {libraryTab === 'important_questions' ? (
+                <ImportantQuestionsHub onOpenNote={(path, name) => handleDownload(path, name)} />
+            ) : libraryTab === 'blueprints' ? (
+                <ExamBlueprintsHub />
+            ) : (
+                <>
+                    {/* Instant Search Bar */}
+                    <div className="relative">
+                <Search className="w-4 h-4 text-text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search by subject code or unit name (e.g. M1, BEE, DBMS, OS, Data Structures)..."
+                    className="w-full pl-10 pr-10 py-2.5 rounded-lg bg-surface-card border border-border text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
+                />
+                {searchQuery && (
+                    <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary rounded cursor-pointer"
+                        aria-label="Clear search"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                )}
             </div>
 
             {focusSubject && (
-                <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                     <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-amber-400 uppercase tracking-wider">Backlog focus</p>
-                        <p className="text-sm text-white font-semibold truncate">{focusSubject}</p>
+                        <p className="text-xs font-bold text-amber-800 uppercase tracking-wider">Backlog focus</p>
+                        <p className="text-sm text-text-primary font-semibold truncate">{focusSubject}</p>
                         <p className="text-xs text-text-muted mt-1">Browse notes below, or search PYQs for this subject.</p>
                     </div>
                     <div className="flex gap-2 shrink-0">
@@ -342,25 +464,23 @@ export default function NotesHub() {
             )}
 
             {/* Contribute Notes Section */}
-            <div
-                className="bg-gradient-to-br from-emerald-500/10 via-bg-card to-bg-card rounded-3xl border border-emerald-500/20 overflow-hidden"
-            >
+            <div className="card border border-border overflow-hidden">
                 <button
                     onClick={() => setShowContribute(!showContribute)}
-                    className="w-full flex items-center gap-4 p-6 hover:bg-white/5 transition-colors"
+                    className="w-full flex items-center gap-3.5 p-4 hover:bg-surface-subtle transition-colors text-left cursor-pointer"
                 >
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
-                        <Plus className="w-6 h-6 text-white" />
+                    <div className="w-8 h-8 rounded-md bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0">
+                        <Plus className="w-4 h-4 text-emerald-600" />
                     </div>
-                    <div className="flex-1 text-left">
-                        <h2 className="text-xl font-bold text-white">Share Study Materials</h2>
-                        <p className="text-xs text-text-muted mt-1">
-                            Help other students by uploading your notes
+                    <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-semibold text-text-primary">Contribute Study Material</h3>
+                        <p className="text-xs text-text-muted mt-0.5">
+                            Upload verified lecture notes, laboratory manuals, or syllabus guides
                         </p>
                     </div>
                     {showContribute
-                        ? <ChevronDown className="w-5 h-5 text-text-muted" />
-                        : <ChevronRight className="w-5 h-5 text-text-muted" />
+                        ? <ChevronDown className="w-4 h-4 text-text-muted shrink-0" />
+                        : <ChevronRight className="w-4 h-4 text-text-muted shrink-0" />
                     }
                 </button>
 
@@ -371,13 +491,13 @@ export default function NotesHub() {
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
                             transition={{ duration: 0.2 }}
-                            className="border-t border-emerald-500/10"
+                            className="border-t border-border"
                         >
                             <div className="p-6 space-y-5">
                                 {/* Row 1: Regulation + Subject */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-[0.15em] mb-2 block">
+                                        <label className="text-[10px] font-bold text-emerald-800 uppercase tracking-[0.15em] mb-2 block">
                                             Regulation
                                         </label>
                                         <select
@@ -395,7 +515,7 @@ export default function NotesHub() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-[0.15em] mb-2 block">
+                                        <label className="text-[10px] font-bold text-emerald-800 uppercase tracking-[0.15em] mb-2 block">
                                             Subject Name *
                                         </label>
                                         <input
@@ -411,7 +531,7 @@ export default function NotesHub() {
                                 {/* Row 2: Year + Semester (optional, mainly for R18) */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-[0.15em] mb-2 block">
+                                        <label className="text-[10px] font-bold text-emerald-800 uppercase tracking-[0.15em] mb-2 block">
                                             Year <span className="text-text-muted">(optional)</span>
                                         </label>
                                         <select
@@ -427,7 +547,7 @@ export default function NotesHub() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-[0.15em] mb-2 block">
+                                        <label className="text-[10px] font-bold text-emerald-800 uppercase tracking-[0.15em] mb-2 block">
                                             Semester <span className="text-text-muted">(optional)</span>
                                         </label>
                                         <select
@@ -444,14 +564,14 @@ export default function NotesHub() {
 
                                 {/* File Upload */}
                                 <div>
-                                    <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-[0.15em] mb-2 block">
+                                    <label className="text-[10px] font-bold text-emerald-800 uppercase tracking-[0.15em] mb-2 block">
                                         PDF File *
                                     </label>
                                     <div
                                         className={`relative border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer
                                             ${uploadFile
-                                                ? 'border-emerald-500/40 bg-emerald-500/5'
-                                                : 'border-white/10 hover:border-emerald-500/30 hover:bg-white/5'
+                                                ? 'border-emerald-500/40 bg-emerald-50'
+                                                : 'border-border hover:border-emerald-500/40 hover:bg-surface-subtle'
                                             }`}
                                         onClick={() => fileInputRef.current?.click()}
                                     >
@@ -478,8 +598,8 @@ export default function NotesHub() {
 
                                         {uploadFile ? (
                                             <div className="flex items-center justify-center gap-3">
-                                                <CheckCircle className="w-5 h-5 text-emerald-400" />
-                                                <span className="text-sm font-medium text-white">{uploadFile.name}</span>
+                                                <CheckCircle className="w-5 h-5 text-emerald-600" />
+                                                <span className="text-sm font-medium text-text-primary">{uploadFile.name}</span>
                                                 <span className="text-xs text-text-muted">({formatFileSize(uploadFile.size)})</span>
                                                 <button
                                                     onClick={(e) => {
@@ -487,9 +607,9 @@ export default function NotesHub() {
                                                         setUploadFile(null);
                                                         if (fileInputRef.current) fileInputRef.current.value = '';
                                                     }}
-                                                    className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+                                                    className="p-1 hover:bg-surface-subtle rounded-lg transition-colors cursor-pointer"
                                                 >
-                                                    <X className="w-4 h-4 text-text-muted hover:text-red-400" />
+                                                    <X className="w-4 h-4 text-text-muted hover:text-red-500" />
                                                 </button>
                                             </div>
                                         ) : (
@@ -527,7 +647,7 @@ export default function NotesHub() {
                                     </motion.button>
                                 </div>
 
-                                <p className="text-xs text-emerald-400 text-center font-medium">
+                                <p className="text-xs text-emerald-800 text-center font-medium">
                                     📝 Uploaded notes go to an admin queue and will instantly appear here once approved.
                                 </p>
                             </div>
@@ -536,34 +656,76 @@ export default function NotesHub() {
                 </AnimatePresence>
             </div>
 
-            {/* Regulations */}
-            {(!catalog || catalog.regulations.length === 0) ? (
-                <div className="bg-bg-card border border-white/5 rounded-3xl p-8 text-center">
-                    <BookOpen className="w-10 h-10 text-text-muted mx-auto mb-3" />
-                    <p className="text-white font-bold mb-2">No Notes Available Yet</p>
-                    <p className="text-sm text-text-muted">Be the first to contribute! Use the form above to upload study materials.</p>
+            {/* Search Results Mode */}
+            {searchQuery.trim() ? (
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between text-xs text-text-muted px-1">
+                        <span>Found {matchingNotes.length} matching unit(s) for &ldquo;{searchQuery}&rdquo;</span>
+                        <button
+                            type="button"
+                            onClick={() => setSearchQuery('')}
+                            className="text-accent hover:underline cursor-pointer"
+                        >
+                            View All Folders
+                        </button>
+                    </div>
+                    {matchingNotes.length === 0 ? (
+                        <div className="bg-surface-card border border-border rounded-lg p-8 text-center">
+                            <BookOpen className="w-8 h-8 text-text-muted mx-auto mb-2" />
+                            <p className="text-text-primary font-medium text-sm">No notes found for &ldquo;{searchQuery}&rdquo;</p>
+                            <p className="text-xs text-text-muted mt-1">Try searching by subject acronym (e.g. M1, BEE, CN, DBMS) or clear the search to browse all folders.</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {matchingNotes.map(({ file, breadcrumb, subject }) => (
+                                <button
+                                    key={file.path}
+                                    onClick={() => handleDownload(file.path, file.filename || file.name)}
+                                    className="flex items-center gap-3 p-3.5 rounded-lg bg-surface-card hover:bg-surface-subtle border border-border hover:border-accent/40 transition-colors text-left group cursor-pointer"
+                                >
+                                    <FileText className="w-4 h-4 text-accent shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-semibold text-text-primary truncate group-hover:text-accent transition-colors">
+                                            {file.name}
+                                        </p>
+                                        <p className="text-[11px] text-text-muted truncate mt-0.5">
+                                            {breadcrumb} · <span className="text-accent/80 font-medium">{subject}</span>
+                                        </p>
+                                        <p className="text-[10px] text-text-muted font-mono mt-0.5">{formatFileSize(file.size)}</p>
+                                    </div>
+                                    <Download className="w-4 h-4 text-text-muted group-hover:text-accent shrink-0 transition-colors" />
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            ) : (!catalog || catalog.regulations.length === 0) ? (
+                <div className="bg-surface-card border border-border rounded-lg p-8 text-center shadow-sm">
+                    <BookOpen className="w-8 h-8 text-text-muted mx-auto mb-3" />
+                    <p className="text-text-primary font-semibold mb-1">No Study Materials Indexed</p>
+                    <p className="text-xs text-text-muted">No syllabus or lecture notes cataloged yet. Submit materials above to seed this repository.</p>
                 </div>
             ) : (
                 catalog.regulations.map((reg) => (
                     <div
                         key={reg.name}
-                        className="bg-bg-card border border-white/5 rounded-3xl overflow-hidden"
+                        className="bg-bg-card border border-border rounded-xl overflow-hidden shadow-sm"
                     >
                         {/* Regulation Header */}
                         <button
                             onClick={() => toggleExpand(reg.path)}
-                            className="w-full flex items-center gap-4 p-6 hover:bg-white/5 transition-colors"
+                            className="w-full flex items-center gap-4 p-5 hover:bg-surface-subtle transition-colors"
                         >
-                            <div className="w-12 h-12 flex-shrink-0 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                            <div className="w-10 h-10 flex-shrink-0 rounded-lg bg-surface-subtle border border-border flex items-center justify-center text-text-primary">
                                 {reg.name === 'Contributed Notes' ? (
-                                    <Users className="w-5 h-5 text-white" />
+                                    <Users className="w-4 h-4 text-accent" />
                                 ) : (
-                                    <span className="text-white font-black text-sm">{reg.name}</span>
+                                    <span className="font-mono font-bold text-xs text-accent">{reg.name}</span>
                                 )}
                             </div>
                             <div className="flex-1 min-w-0 text-left">
-                                <h2 className="text-xl font-bold text-white truncate">
-                                    {reg.name === 'Contributed Notes' ? reg.name : `${reg.name} Notes`}
+                                <h2 className="text-base font-semibold text-text-primary truncate">
+                                    {reg.name === 'Contributed Notes' ? reg.name : `${reg.name} Academic Materials`}
                                 </h2>
                                 <p className="text-xs text-text-muted mt-1">
                                     {reg.years
@@ -597,14 +759,14 @@ export default function NotesHub() {
                                                 <button
                                                     key={file.path}
                                                     onClick={() => handleDownload(file.path, file.filename || file.name)}
-                                                    className="flex items-center gap-3 p-4 bg-white/5 hover:bg-violet-500/10 border border-white/10 hover:border-violet-500/30 rounded-2xl transition-all group"
+                                                    className="flex items-center gap-3 p-3.5 bg-surface-subtle hover:bg-surface-hover border border-border hover:border-accent/40 rounded-lg transition-colors group cursor-pointer"
                                                 >
-                                                    <FileText className="w-5 h-5 text-violet-400 flex-shrink-0" />
+                                                    <FileText className="w-4 h-4 text-accent flex-shrink-0" />
                                                     <div className="flex-1 text-left min-w-0">
-                                                        <p className="text-sm font-medium text-white truncate">{file.name}</p>
-                                                        <p className="text-[10px] text-text-muted">{formatFileSize(file.size)}</p>
+                                                        <p className="text-sm font-medium text-text-primary truncate">{file.name}</p>
+                                                        <p className="text-[10px] text-text-muted font-mono">{formatFileSize(file.size)}</p>
                                                     </div>
-                                                    <Download className="w-4 h-4 text-text-muted group-hover:text-violet-400 transition-colors flex-shrink-0" />
+                                                    <Download className="w-4 h-4 text-text-muted group-hover:text-accent transition-colors flex-shrink-0" />
                                                 </button>
                                             ))}
                                         </div>
@@ -615,10 +777,10 @@ export default function NotesHub() {
                                         <div key={year.path}>
                                             <button
                                                 onClick={() => toggleExpand(year.path)}
-                                                className="w-full flex items-center gap-3 px-6 py-3 hover:bg-white/5 transition-colors border-b border-white/5"
+                                                className="w-full flex items-center gap-3 px-6 py-3 hover:bg-surface-subtle transition-colors border-b border-border text-left cursor-pointer"
                                             >
-                                                <Folder className="w-4 h-4 text-amber-400" />
-                                                <span className="font-semibold text-white text-sm">{year.name}</span>
+                                                <Folder className="w-4 h-4 text-amber-500" />
+                                                <span className="font-semibold text-text-primary text-sm">{year.name}</span>
                                                 <span className="text-xs text-text-muted ml-auto mr-2">
                                                     {year.semesters.length} sem(s)
                                                 </span>
@@ -633,10 +795,10 @@ export default function NotesHub() {
                                                     <div key={sem.path} className="pl-6">
                                                         <button
                                                             onClick={() => toggleExpand(sem.path)}
-                                                            className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors"
+                                                            className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-subtle transition-colors text-left cursor-pointer"
                                                         >
-                                                            <Folder className="w-4 h-4 text-cyan-400" />
-                                                            <span className="font-medium text-white text-sm">{sem.name}</span>
+                                                            <Folder className="w-4 h-4 text-accent" />
+                                                            <span className="font-medium text-text-primary text-sm">{sem.name}</span>
                                                             <span className="text-xs text-text-muted ml-auto mr-2">
                                                                 {sem.subjects.length} subject(s)
                                                             </span>
@@ -656,20 +818,34 @@ export default function NotesHub() {
                                                                 >
                                                                     {sem.subjects.map((subject) => (
                                                                         <div key={subject.path} className="mb-2">
-                                                                            <p className="text-xs font-bold text-text-muted uppercase tracking-wider px-4 py-1.5">
-                                                                                {subject.name}
-                                                                            </p>
+                                                                            <div className="flex items-center justify-between px-4 py-1.5">
+                                                                                <p className="text-xs font-bold text-text-muted uppercase tracking-wider">
+                                                                                    {subject.name}
+                                                                                </p>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        sessionStorage.setItem('notesFocusSubject', subject.name);
+                                                                                        setLibraryTab('important_questions');
+                                                                                    }}
+                                                                                    className="text-[11px] font-mono text-amber-700 hover:text-amber-800 transition-colors inline-flex items-center gap-1 cursor-pointer font-semibold"
+                                                                                    title="View time-to-time important questions for this course"
+                                                                                >
+                                                                                    <Flame className="w-3 h-3 text-amber-600" />
+                                                                                    <span>Imp Questions</span>
+                                                                                </button>
+                                                                            </div>
                                                                             <div className="space-y-1">
                                                                                 {subject.files.map((file) => (
                                                                                     <button
                                                                                         key={file.path}
                                                                                         onClick={() => handleDownload(file.path, file.name)}
-                                                                                        className="w-full flex items-center gap-3 px-4 py-2 hover:bg-violet-500/10 rounded-xl transition-colors group"
+                                                                                        className="w-full flex items-center gap-3 px-3.5 py-2 hover:bg-surface-subtle rounded-md transition-colors group cursor-pointer"
                                                                                     >
-                                                                                        <FileText className="w-4 h-4 text-violet-400 flex-shrink-0" />
-                                                                                        <span className="text-sm text-white truncate flex-1 text-left">{file.name}</span>
-                                                                                        <span className="text-[10px] text-text-muted">{formatFileSize(file.size)}</span>
-                                                                                        <Download className="w-3.5 h-3.5 text-text-muted group-hover:text-violet-400 transition-colors flex-shrink-0" />
+                                                                                        <FileText className="w-4 h-4 text-accent flex-shrink-0" />
+                                                                                        <span className="text-sm text-text-primary truncate flex-1 text-left">{file.name}</span>
+                                                                                        <span className="text-[10px] text-text-muted font-mono">{formatFileSize(file.size)}</span>
+                                                                                        <Download className="w-3.5 h-3.5 text-text-muted group-hover:text-accent transition-colors flex-shrink-0" />
                                                                                     </button>
                                                                                 ))}
                                                                             </div>
@@ -688,6 +864,8 @@ export default function NotesHub() {
                         </AnimatePresence>
                     </div>
                 )))}
+                </>
+            )}
 
             {/* Privacy Notice */}
             <div className="text-center text-xs text-text-muted py-2">

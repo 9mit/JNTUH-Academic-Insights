@@ -19,7 +19,7 @@ export default function ActionButtons() {
                 hallTicket: data.hallTicket,
                 regulation: data.regulation,
             });
-            toast.success('Excel file downloaded!');
+            toast.success('Official Excel transcript exported');
         } catch {
             toast.error('Failed to export. Please try again.');
         }
@@ -36,7 +36,7 @@ export default function ActionButtons() {
 
             await copyToClipboard(url);
             setCopied(true);
-            toast.success('Link copied to clipboard!');
+            toast.success('Share link copied to clipboard');
 
             setTimeout(() => setCopied(false), 3000);
         } catch {
@@ -46,7 +46,7 @@ export default function ActionButtons() {
 
     const handleCgpaCard = async () => {
         if (cgpa <= 0) {
-            toast.error('Import results before sharing a CGPA card');
+            toast.error('Import results before generating academic credential card');
             return;
         }
         setCardBusy(true);
@@ -57,46 +57,45 @@ export default function ActionButtons() {
                 percentage,
                 includeName: true,
             });
-            const shared = await shareCgpaCard(blob, 'JNTUH CGPA Card');
+            const shared = await shareCgpaCard(blob, 'JNTUH Academic Credential');
             if (!shared) {
                 await downloadCgpaCard(blob);
-                toast.success('CGPA card downloaded — share it on WhatsApp');
+                toast.success('Academic credential card generated');
             } else {
-                toast.success('Shared!');
+                toast.success('Shared successfully');
             }
         } catch {
-            toast.error('Could not create CGPA card');
+            toast.error('Could not generate credential card');
         } finally {
             setCardBusy(false);
         }
     };
 
     return (
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
             <button
                 onClick={handleExport}
-                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-xl text-emerald-400 font-medium text-sm transition-all"
+                className="btn-secondary text-xs py-1.5 px-3"
+                title="Export semester marks into structured Excel spreadsheet"
             >
-                <Download className="w-4 h-4" />
+                <Download className="w-3.5 h-3.5" />
                 Export Excel
             </button>
 
             <button
                 onClick={handleShare}
-                className={`flex items-center gap-2 px-4 py-2.5 border rounded-xl font-medium text-sm transition-all ${copied
-                    ? 'bg-primary/20 border-primary/30 text-primary'
-                    : 'bg-primary/10 hover:bg-primary/20 border-primary/20 text-primary'
-                    }`}
+                className={`btn-secondary text-xs py-1.5 px-3 ${copied ? 'border-accent-blue-border text-accent-blue-bright' : ''}`}
+                title="Generate encrypted session share link"
             >
                 {copied ? (
                     <>
-                        <Check className="w-4 h-4" />
-                        Copied!
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        Copied
                     </>
                 ) : (
                     <>
-                        <Link className="w-4 h-4" />
-                        Share Link
+                        <Link className="w-3.5 h-3.5" />
+                        Share Session
                     </>
                 )}
             </button>
@@ -104,10 +103,11 @@ export default function ActionButtons() {
             <button
                 onClick={handleCgpaCard}
                 disabled={cardBusy}
-                className="flex items-center gap-2 px-4 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl text-amber-300 font-medium text-sm transition-all disabled:opacity-50"
+                className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-50"
+                title="Render official academic standing card graphic"
             >
-                {cardBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
-                CGPA Card
+                {cardBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
+                Credential Card
             </button>
         </div>
     );

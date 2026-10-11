@@ -1,9 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useAcademic } from '../context/AcademicContext';
-import { motion } from 'framer-motion';
-import { Building2, CheckCircle2, XCircle, AlertCircle, Search } from 'lucide-react';
+import { Building2, CheckCircle2, AlertCircle } from 'lucide-react';
 
-// Common company cutoffs (CGPA)
 const COMPANY_CUTOFFS = [
     { name: 'TCS', cutoff: 6.0, tier: 'Mass Recruiter' },
     { name: 'Infosys', cutoff: 6.0, tier: 'Mass Recruiter' },
@@ -19,8 +17,8 @@ const COMPANY_CUTOFFS = [
     { name: 'Deloitte', cutoff: 7.0, tier: 'Consulting' },
     { name: 'KPMG', cutoff: 7.0, tier: 'Consulting' },
     { name: 'EY (Ernst & Young)', cutoff: 7.0, tier: 'Consulting' },
-    { name: 'Zoho', cutoff: 0, tier: 'Product Company' }, // No CGPA cutoff
-    { name: 'Custom', cutoff: 7.0, tier: 'Custom' },
+    { name: 'Zoho', cutoff: 0, tier: 'Product Company' },
+    { name: 'Custom Criteria', cutoff: 7.0, tier: 'Custom' },
 ];
 
 export default function EligibilityChecker() {
@@ -35,7 +33,7 @@ export default function EligibilityChecker() {
         const company = COMPANY_CUTOFFS.find(c => c.name === selectedCompany);
         if (!company) return null;
 
-        const cutoff = selectedCompany === 'Custom' ? customCutoff : company.cutoff;
+        const cutoff = selectedCompany === 'Custom Criteria' ? customCutoff : company.cutoff;
         const isEligible = cgpa >= cutoff;
         const gap = cutoff - cgpa;
 
@@ -50,37 +48,32 @@ export default function EligibilityChecker() {
     }, [selectedCompany, customCutoff, cgpa]);
 
     return (
-        <div className="bg-gradient-to-br from-blue-500/10 to-bg-card rounded-3xl p-6 border border-blue-500/20">
-            {/* Header */}
-            <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
-                    <Building2 className="w-5 h-5 text-white" />
+        <div className="card p-5 border border-border space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+                <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded bg-accent-subtle text-accent flex items-center justify-center">
+                        <Building2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-semibold text-text-primary">Campus Placement Eligibility Audit</h3>
+                        <p className="text-xs text-text-muted">Verify academic cutoff compliance across recruitment tiers</p>
+                    </div>
                 </div>
+                <div className="text-right font-mono text-xs">
+                    <span className="text-text-muted">Current CGPA: </span>
+                    <strong className="text-accent">{cgpa > 0 ? cgpa.toFixed(2) : '—'}</strong>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
                 <div>
-                    <h3 className="text-lg font-bold text-white">Eligibility Checker</h3>
-                    <p className="text-xs text-text-muted">Check if you meet company placement cutoffs</p>
-                </div>
-            </div>
-
-            {/* Current CGPA Display */}
-            <div className="bg-black/20 rounded-xl p-4 mb-4 flex items-center justify-between">
-                <span className="text-sm text-text-muted">Your Current CGPA</span>
-                <span className="text-2xl font-black text-primary">{cgpa > 0 ? cgpa.toFixed(2) : '—'}</span>
-            </div>
-
-            {/* Company Selector */}
-            <div className="mb-4">
-                <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">
-                    Select Company
-                </label>
-                <div className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
+                    <label className="field-label">Target Recruiter / Company</label>
                     <select
                         value={selectedCompany}
                         onChange={(e) => setSelectedCompany(e.target.value)}
-                        className="input-field w-full !pl-14"
+                        className="input-field text-xs cursor-pointer"
                     >
-                        <option value="">Choose a company...</option>
+                        <option value="">Select company criteria...</option>
                         <optgroup label="Mass Recruiters">
                             {COMPANY_CUTOFFS.filter(c => c.tier === 'Mass Recruiter').map(c => (
                                 <option key={c.name} value={c.name}>
@@ -102,92 +95,70 @@ export default function EligibilityChecker() {
                                 </option>
                             ))}
                         </optgroup>
-                        <optgroup label="Custom">
-                            <option value="Custom">Enter Custom Cutoff</option>
+                        <optgroup label="Custom Benchmark">
+                            <option value="Custom Criteria">Enter Custom Cutoff</option>
                         </optgroup>
                     </select>
                 </div>
+
+                {selectedCompany === 'Custom Criteria' && (
+                    <div>
+                        <label className="field-label">Custom CGPA Cutoff</label>
+                        <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="10"
+                            value={customCutoff}
+                            onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                setCustomCutoff(Math.max(0, Math.min(10, val)));
+                            }}
+                            className="input-field font-mono text-xs"
+                        />
+                    </div>
+                )}
             </div>
 
-            {/* Custom Cutoff Input */}
-            {selectedCompany === 'Custom' && (
-                <div className="mb-4">
-                    <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">
-                        Custom CGPA Cutoff
-                    </label>
-                    <input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="10"
-                        value={customCutoff}
-                        onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0;
-                            setCustomCutoff(Math.max(0, Math.min(10, val)));
-                        }}
-                        className="input-field w-full"
-                    />
-                </div>
-            )}
-
-            {/* Result Display */}
             {eligibilityResult && (
-                <motion.div
-                    initial={false}
-                    animate={{ opacity: 1 }}
-                    className={`mt-4 p-5 rounded-2xl border-2 ${eligibilityResult.noCutoff
-                        ? 'bg-emerald-500/10 border-emerald-500/30'
-                        : eligibilityResult.isEligible
-                            ? 'bg-emerald-500/10 border-emerald-500/30'
-                            : 'bg-rose-500/10 border-rose-500/30'
-                        }`}
-                >
-                    <div className="flex items-center gap-3 mb-3">
-                        {eligibilityResult.noCutoff ? (
-                            <AlertCircle className="w-8 h-8 text-emerald-400" />
-                        ) : eligibilityResult.isEligible ? (
-                            <CheckCircle2 className="w-8 h-8 text-emerald-400" />
-                        ) : (
-                            <XCircle className="w-8 h-8 text-rose-400" />
-                        )}
-                        <div>
-                            <p className={`text-xl font-black ${eligibilityResult.noCutoff || eligibilityResult.isEligible
-                                ? 'text-emerald-400'
-                                : 'text-rose-400'
-                                }`}>
+                <div className={`p-4 rounded-lg border font-mono text-xs ${
+                    eligibilityResult.noCutoff || eligibilityResult.isEligible
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                        : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}>
+                    <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                            {eligibilityResult.noCutoff || eligibilityResult.isEligible ? (
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            ) : (
+                                <AlertCircle className="w-4 h-4 text-rose-600" />
+                            )}
+                            <strong className="text-sm font-sans font-semibold text-text-primary">
                                 {eligibilityResult.noCutoff
-                                    ? 'No CGPA Requirement!'
+                                    ? 'No Minimum CGPA Threshold'
                                     : eligibilityResult.isEligible
-                                        ? 'You Are Eligible! ✅'
-                                        : 'Not Eligible Yet ❌'}
-                            </p>
-                            <p className="text-sm text-text-muted">
-                                {eligibilityResult.company} • {eligibilityResult.tier}
-                            </p>
+                                    ? 'Meets Placement Criteria'
+                                    : 'Below Cutoff Threshold'}
+                            </strong>
                         </div>
+                        <span className="text-text-muted">
+                            {eligibilityResult.company} · {eligibilityResult.tier}
+                        </span>
                     </div>
 
                     {!eligibilityResult.noCutoff && (
-                        <div className="bg-black/20 rounded-xl p-3 text-center">
-                            {eligibilityResult.isEligible ? (
-                                <p className="text-sm text-text-secondary">
-                                    You exceed the cutoff by <span className="font-bold text-emerald-400">{eligibilityResult.gap.toFixed(2)}</span> points
-                                </p>
-                            ) : (
-                                <p className="text-sm text-text-secondary">
-                                    You need <span className="font-bold text-rose-400">{eligibilityResult.gap.toFixed(2)}</span> more CGPA to become eligible
-                                </p>
-                            )}
-                        </div>
+                        <p className="mt-2 text-text-secondary text-xs font-mono">
+                            {eligibilityResult.isEligible
+                                ? `Current CGPA exceeds required cutoff (${eligibilityResult.cutoff.toFixed(1)}) by +${eligibilityResult.gap.toFixed(2)} points.`
+                                : `Deficit of ${eligibilityResult.gap.toFixed(2)} CGPA points from required benchmark (${eligibilityResult.cutoff.toFixed(1)}).`}
+                        </p>
                     )}
-                </motion.div>
+                </div>
             )}
 
             {cgpa === 0 && (
-                <div className="mt-4 p-4 bg-amber-500/10 rounded-xl text-center">
-                    <p className="text-sm text-amber-300">
-                        ⚠️ Add your results first to check eligibility
-                    </p>
+                <div className="p-3 bg-surface-subtle border border-border rounded-lg text-xs font-mono text-text-muted text-center">
+                    Import or enter semester results to evaluate placement compliance.
                 </div>
             )}
         </div>

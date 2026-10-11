@@ -19,7 +19,6 @@ export default function DetailedModeTable({ semester }: DetailedModeTableProps) 
     const grades = useMemo(() => {
         const base = getValidGradesForRegulation(semesterReg).filter(g => g !== '-') as Grade[];
         const present = new Set(base);
-        // Keep grades already on subjects (mixed R16/R18 careers) selectable
         for (const s of semester.subjects) {
             if (s.grade && !present.has(s.grade as Grade)) {
                 present.add(s.grade as Grade);
@@ -30,69 +29,69 @@ export default function DetailedModeTable({ semester }: DetailedModeTableProps) 
     }, [semesterReg, semester.subjects]);
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-3">
             {semester.subjects.length > 0 ? (
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm border-collapse">
+                    <table className="w-full text-left text-xs font-mono border-collapse">
                         <thead>
-                            <tr className="border-b border-border bg-white/[0.03] text-[10px] font-bold text-text-secondary uppercase tracking-widest">
-                                <th className="px-3 py-3">Subject Name</th>
-                                <th className="px-3 py-3 text-center w-16">Int</th>
-                                <th className="px-3 py-3 text-center w-16">Ext</th>
-                                <th className="px-3 py-3 text-center w-16">Total</th>
-                                <th className="px-3 py-3 text-center w-24">Grade</th>
-                                <th className="px-3 py-3 text-center w-24">Credits</th>
-                                <th className="px-3 py-3 text-right w-12"></th>
+                            <tr className="border-b border-border bg-surface-subtle text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+                                <th className="px-3 py-2.5 font-medium">Subject Name</th>
+                                <th className="px-3 py-2.5 text-center w-14 font-medium">Int</th>
+                                <th className="px-3 py-2.5 text-center w-14 font-medium">Ext</th>
+                                <th className="px-3 py-2.5 text-center w-14 font-medium">Total</th>
+                                <th className="px-3 py-2.5 text-center w-20 font-medium">Grade</th>
+                                <th className="px-3 py-2.5 text-center w-16 font-medium">Credits</th>
+                                <th className="px-2 py-2.5 text-right w-10"></th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-border/30">
+                        <tbody className="divide-y divide-border/60">
                             {semester.subjects.map((subject) => (
-                                <tr key={subject.id} className="zebra-row group hover:bg-white/[0.01] transition-colors">
-                                    <td className="px-3 py-4">
-                                        <div className="font-semibold text-text-primary">
-                                            {subject.name}
+                                <tr key={subject.id} className="hover:bg-surface-subtle transition-colors">
+                                    <td className="px-3 py-2 font-sans font-medium text-text-primary">
+                                        <div className="flex items-center gap-2">
+                                            <span>{subject.name}</span>
                                             {subject.nonCredit && (
-                                                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                                                    Non-Credit
+                                                <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                                                    Audit / Non-Credit
                                                 </span>
                                             )}
                                         </div>
                                     </td>
-                                    <td className="px-3 py-4 text-center">
-                                        <div className="text-xs font-mono text-text-muted">{subject.internal ?? '—'}</div>
+                                    <td className="px-3 py-2 text-center text-text-muted">
+                                        {subject.internal ?? '—'}
                                     </td>
-                                    <td className="px-3 py-4 text-center">
-                                        <div className="text-xs font-mono text-text-muted">{subject.external ?? '—'}</div>
+                                    <td className="px-3 py-2 text-center text-text-muted">
+                                        {subject.external ?? '—'}
                                     </td>
-                                    <td className="px-3 py-4 text-center">
-                                        <div className="text-xs font-mono font-bold text-primary">{subject.total ?? '—'}</div>
+                                    <td className="px-3 py-2 text-center font-bold text-text-primary">
+                                        {subject.total ?? '—'}
                                     </td>
-                                    <td className="px-3 py-4">
+                                    <td className="px-3 py-2 text-center">
                                         <select
                                             value={subject.grade}
                                             onChange={(e) => updateSubject(semester.id, subject.id, { grade: e.target.value as Grade })}
-                                            className="bg-bg-primary border border-border rounded-lg px-2 py-1.5 focus:border-primary focus:ring-1 focus:ring-primary/20 w-full font-bold text-center text-xs"
+                                            className="bg-surface-card border border-border rounded px-2 py-1 text-center font-mono font-semibold text-xs text-text-primary focus:border-accent focus:outline-none"
                                         >
                                             {grades.map(g => (
                                                 <option key={g} value={g}>{g}</option>
                                             ))}
                                         </select>
                                     </td>
-                                    <td className="px-3 py-4 text-center">
+                                    <td className="px-3 py-2 text-center">
                                         <input
                                             type="number"
                                             value={subject.credits}
                                             onChange={(e) => updateSubject(semester.id, subject.id, { credits: Number(e.target.value) })}
-                                            className="bg-bg-primary border border-border rounded-lg px-2 py-1.5 focus:border-primary focus:ring-1 focus:ring-primary/20 w-full text-center text-xs font-bold"
+                                            className="bg-surface-card border border-border rounded px-2 py-1 text-center font-mono font-semibold text-xs text-text-primary focus:border-accent focus:outline-none w-14"
                                         />
                                     </td>
-                                    <td className="px-3 py-4 text-right">
+                                    <td className="px-2 py-2 text-right">
                                         <button
                                             onClick={() => removeSubject(semester.id, subject.id)}
-                                            className="text-text-muted hover:text-error transition-all p-2 rounded-lg hover:bg-error/10"
-                                            title="Remove Subject"
+                                            className="text-text-muted hover:text-rose-600 p-1 rounded hover:bg-rose-50 transition-colors cursor-pointer"
+                                            title="Delete Course"
                                         >
-                                            <Trash2 className="w-4 h-4" />
+                                            <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                     </td>
                                 </tr>
@@ -101,38 +100,34 @@ export default function DetailedModeTable({ semester }: DetailedModeTableProps) 
                     </table>
                 </div>
             ) : (
-                <div className="flex flex-col items-center justify-center py-12 px-6 text-center bg-bg-primary/30 border-2 border-dashed border-border rounded-2xl">
-                    <div className="w-16 h-16 rounded-3xl bg-white/5 flex items-center justify-center mb-4">
-                        <LayoutGrid className="w-8 h-8 text-text-muted" />
-                    </div>
-                    <h4 className="text-base font-bold text-text-primary">Empty Academic Record</h4>
-                    <p className="text-xs text-text-muted mt-2 mb-6 max-w-[260px] mx-auto leading-relaxed">
-                        No subjects found for this semester. Import a PDF or add rows manually to begin calculation.
+                <div className="flex flex-col items-center justify-center py-8 px-4 text-center border border-dashed border-border rounded-lg">
+                    <LayoutGrid className="w-6 h-6 text-text-muted mb-2 opacity-50" />
+                    <p className="text-xs font-semibold text-text-primary">No courses in this semester</p>
+                    <p className="text-[11px] text-text-muted mt-0.5 mb-4 max-w-xs">
+                        Add courses manually or import official PDF memos.
                     </p>
                     <button
                         onClick={() => addSubject(semester.id)}
-                        className="btn-primary py-2.5 px-6 text-xs"
+                        className="btn-primary py-1.5 px-3 text-xs"
                     >
-                        <PlusCircle className="w-4 h-4" />
-                        Add First Subject
+                        <PlusCircle className="w-3.5 h-3.5" />
+                        Add Subject
                     </button>
                 </div>
             )}
 
             {semester.subjects.length > 0 && (
-                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-2">
-                    <div className="flex items-center gap-2 text-[10px] text-text-muted font-bold uppercase tracking-wider">
-                        <div className="w-4 h-4 rounded-full bg-primary/10 flex items-center justify-center">
-                            <Info className="w-3 h-3 text-primary" />
-                        </div>
-                        Credits are mapped to course standards
+                <div className="flex items-center justify-between pt-2 border-t border-border">
+                    <div className="flex items-center gap-1.5 text-[10px] text-text-muted font-mono">
+                        <Info className="w-3 h-3 text-accent" />
+                        Credits follow official course scheme
                     </div>
                     <button
                         onClick={() => addSubject(semester.id)}
-                        className="btn-secondary py-2 text-xs flex items-center gap-2 border-primary/20 hover:border-primary/50 text-primary"
+                        className="btn-secondary py-1 px-2.5 text-xs inline-flex items-center gap-1"
                     >
-                        <PlusCircle className="w-4 h-4" />
-                        Add New Row
+                        <PlusCircle className="w-3.5 h-3.5" />
+                        Add Row
                     </button>
                 </div>
             )}

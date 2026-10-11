@@ -97,124 +97,133 @@ export default function SemesterGoals() {
         return { achieved, close, behind, total: withData.length };
     }, [progress]);
 
-    const getStatusStyle = (status: string) => {
-        switch (status) {
-            case 'achieved': return 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400';
-            case 'close': return 'bg-amber-500/20 border-amber-500/30 text-amber-400';
-            case 'behind': return 'bg-rose-500/20 border-rose-500/30 text-rose-400';
-            default: return 'bg-white/5 border-white/10 text-text-muted';
-        }
-    };
-
     const getStatusIcon = (status: string) => {
         switch (status) {
-            case 'achieved': return <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
-            case 'close': return <AlertTriangle className="w-4 h-4 text-amber-400" />;
-            case 'behind': return <AlertTriangle className="w-4 h-4 text-rose-400" />;
+            case 'achieved': return <CheckCircle2 className="w-4 h-4 text-emerald-600" />;
+            case 'close': return <AlertTriangle className="w-4 h-4 text-amber-600" />;
+            case 'behind': return <AlertTriangle className="w-4 h-4 text-rose-600" />;
             default: return <Target className="w-4 h-4 text-text-muted" />;
         }
     };
 
     return (
-        <div className="bg-gradient-to-br from-amber-500/10 to-bg-card rounded-3xl p-6 border border-amber-500/20">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
-                        <Target className="w-5 h-5 text-white" />
+        <div className="bg-bg-card rounded-xl border border-border p-6 shadow-sm">
+                {/* Header */}
+                <div className="flex items-center justify-between gap-4 mb-6 pb-4 border-b border-border">
+                    <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-surface-subtle border border-border flex items-center justify-center text-text-primary">
+                            <Target className="w-4 h-4 text-accent" />
+                        </div>
+                        <div>
+                            <h3 className="text-base font-semibold text-text-primary">Semester Target Goals</h3>
+                            <p className="text-xs text-text-muted">Target SGPA benchmarks and deviation tracking per semester</p>
+                        </div>
                     </div>
-                    <div>
-                        <h3 className="text-lg font-bold text-white">Semester Goals</h3>
-                        <p className="text-xs text-text-muted">Set and track your SGPA targets</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={resetGoals}
-                        className="p-2 text-text-muted hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                        title="Reset to defaults"
-                    >
-                        <RotateCcw className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={saveGoals}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ${saved
-                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                            : 'bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30'
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={resetGoals}
+                            className="p-2 text-text-muted hover:text-text-primary hover:bg-surface-subtle border border-transparent hover:border-border rounded-lg transition-colors"
+                            title="Reset all targets to default"
+                        >
+                            <RotateCcw className="w-4 h-4" />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={saveGoals}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all border ${
+                                saved
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold'
+                                    : 'bg-surface-subtle text-text-primary border-border hover:bg-surface-hover hover:border-border-focus'
                             }`}
-                    >
-                        {saved ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-                        {saved ? 'Saved!' : 'Save Goals'}
-                    </button>
-                </div>
-            </div>
-
-            {/* Summary Stats */}
-            {stats.total > 0 && (
-                <div className="grid grid-cols-3 gap-3 mb-6">
-                    <div className="bg-emerald-500/10 rounded-xl p-3 text-center border border-emerald-500/20">
-                        <p className="text-2xl font-black text-emerald-400">{stats.achieved}</p>
-                        <p className="text-[10px] text-text-muted uppercase">Achieved</p>
-                    </div>
-                    <div className="bg-amber-500/10 rounded-xl p-3 text-center border border-amber-500/20">
-                        <p className="text-2xl font-black text-amber-400">{stats.close}</p>
-                        <p className="text-[10px] text-text-muted uppercase">Close</p>
-                    </div>
-                    <div className="bg-rose-500/10 rounded-xl p-3 text-center border border-rose-500/20">
-                        <p className="text-2xl font-black text-rose-400">{stats.behind}</p>
-                        <p className="text-[10px] text-text-muted uppercase">Behind</p>
+                        >
+                            {saved ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                            {saved ? 'Saved to Session' : 'Save Targets'}
+                        </button>
                     </div>
                 </div>
-            )}
 
-            {/* Goals List */}
-            <div className="space-y-2 max-h-[350px] overflow-y-auto pr-2" style={{ scrollbarWidth: 'thin', scrollbarColor: '#f59e0b #1a1a1a' }}>
-                {progress.map((p) => (
-                    <motion.div
-                        key={p.semId}
-                        initial={false}
-                        animate={{ opacity: 1 }}
-                        className={`flex items-center justify-between p-3 rounded-xl border ${getStatusStyle(p.status)}`}
-                    >
-                        <div className="flex items-center gap-3">
-                            {getStatusIcon(p.status)}
-                            <div>
-                                <p className="text-sm font-medium text-white">{p.label}</p>
-                                {p.status !== 'pending' && (
-                                    <p className="text-[10px] text-text-muted">
-                                        Actual: <span className="font-bold">{p.actual.toFixed(2)}</span>
-                                        {p.diff !== 0 && (
-                                            <span className={p.diff >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
-                                                {' '}({p.diff >= 0 ? '+' : ''}{p.diff.toFixed(2)})
-                                            </span>
+                {/* Summary Stats */}
+                {stats.total > 0 && (
+                    <div className="grid grid-cols-3 gap-3 mb-5">
+                        <div className="bg-surface-subtle rounded-lg p-3 text-center border border-border">
+                            <p className="font-mono text-2xl font-bold text-emerald-700">{stats.achieved}</p>
+                            <p className="text-[11px] font-mono uppercase tracking-wider text-text-muted mt-0.5">Achieved</p>
+                        </div>
+                        <div className="bg-surface-subtle rounded-lg p-3 text-center border border-border">
+                            <p className="font-mono text-2xl font-bold text-amber-800">{stats.close}</p>
+                            <p className="text-[11px] font-mono uppercase tracking-wider text-text-muted mt-0.5">Within Reach</p>
+                        </div>
+                        <div className="bg-surface-subtle rounded-lg p-3 text-center border border-border">
+                            <p className="font-mono text-2xl font-bold text-rose-700">{stats.behind}</p>
+                            <p className="text-[11px] font-mono uppercase tracking-wider text-text-muted mt-0.5">Below Target</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Goals List */}
+                <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
+                    {progress.map((p) => {
+                        const rowBorder =
+                            p.status === 'achieved'
+                                ? 'border-emerald-200 bg-emerald-50/60'
+                                : p.status === 'close'
+                                ? 'border-amber-200 bg-amber-50/60'
+                                : p.status === 'behind'
+                                ? 'border-rose-200 bg-rose-50/60'
+                                : 'border-border bg-surface-subtle';
+
+                        return (
+                            <motion.div
+                                key={p.semId}
+                                initial={false}
+                                animate={{ opacity: 1 }}
+                                className={`flex items-center justify-between p-3 rounded-lg border ${rowBorder} transition-colors`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="flex-shrink-0">
+                                        {getStatusIcon(p.status)}
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-semibold text-text-primary">{p.label}</p>
+                                        {p.status !== 'pending' ? (
+                                            <p className="text-[11px] font-mono text-text-muted mt-0.5">
+                                                Actual: <span className="font-semibold text-text-primary">{p.actual.toFixed(2)}</span>
+                                                {p.diff !== 0 && (
+                                                    <span className={`ml-1.5 font-medium ${p.diff >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                                        {p.diff >= 0 ? '+' : ''}{p.diff.toFixed(2)}
+                                                    </span>
+                                                )}
+                                            </p>
+                                        ) : (
+                                            <p className="text-[11px] font-mono text-text-muted mt-0.5">No semester results recorded</p>
                                         )}
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-text-muted">Target:</span>
-                            <input
-                                type="number"
-                                step="0.1"
-                                min="0"
-                                max="10"
-                                value={goals.find(g => g.semId === p.semId)?.target || 8.0}
-                                onChange={(e) => updateGoal(p.semId, parseFloat(e.target.value) || 0)}
-                                className="w-16 px-2 py-1 text-sm text-center bg-black/30 border border-white/10 rounded-lg text-white font-bold"
-                            />
-                        </div>
-                    </motion.div>
-                ))}
-            </div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[11px] font-mono uppercase tracking-wider text-text-muted">Target SGPA:</span>
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        min="0"
+                                        max="10"
+                                        value={goals.find(g => g.semId === p.semId)?.target || 8.0}
+                                        onChange={(e) => updateGoal(p.semId, parseFloat(e.target.value) || 0)}
+                                        className="w-16 px-2 py-1 text-xs font-mono font-bold text-center bg-bg-surface border border-border rounded-md text-text-primary focus:border-border-focus focus:outline-none transition-colors"
+                                    />
+                                </div>
+                            </motion.div>
+                        );
+                    })}
+                </div>
 
-            {/* Pro Tip */}
-            <div className="mt-4 p-3 bg-black/20 rounded-xl flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                <p className="text-xs text-text-muted">
-                    <strong className="text-white">Pro tip:</strong> Set realistic targets based on your past performance. Aim for 0.2-0.5 improvement each semester.
-                </p>
+                {/* Academic guidance */}
+                <div className="mt-4 p-3 bg-surface-subtle border border-border rounded-lg flex items-start gap-2.5">
+                    <TrendingUp className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-text-muted leading-relaxed">
+                        <strong className="text-text-primary font-medium">Trajectory Tip:</strong> Target incremental gains of 0.20 to 0.40 SGPA per semester. Consistent 8.0+ performance preserves first-class distinction eligibility.
+                    </p>
+                </div>
             </div>
-        </div>
     );
 }

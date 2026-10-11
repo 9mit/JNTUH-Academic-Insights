@@ -30,12 +30,12 @@ export default function ManualModeInput({ semester }: ManualModeInputProps) {
         const numValue = parseFloat(value);
 
         if (isNaN(numValue)) {
-            setError('Please enter a valid number');
+            setError('Please enter a valid numeric SGPA');
             return;
         }
 
         if (!validateGPA(numValue)) {
-            setError('SGPA must be between 0 and 10');
+            setError('SGPA must be between 0.00 and 10.00');
             return;
         }
 
@@ -45,11 +45,11 @@ export default function ManualModeInput({ semester }: ManualModeInputProps) {
     const percentage = semester.manualSGPA ? toPercentage(semester.manualSGPA) : null;
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row gap-6 items-start">
+        <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row gap-5 items-start">
                 <div className="flex-1 w-full max-w-xs">
-                    <label className="label-caps mb-2 flex items-center gap-2">
-                        <Target className="w-3.5 h-3.5" />
+                    <label className="field-label flex items-center gap-1.5">
+                        <Target className="w-3.5 h-3.5 text-accent" />
                         Semester SGPA
                     </label>
                     <div className="relative">
@@ -61,14 +61,14 @@ export default function ManualModeInput({ semester }: ManualModeInputProps) {
                             min="0"
                             max="10"
                             step="0.01"
-                            className={`input-field text-xl font-bold ${error ? 'border-error ring-1 ring-error/20' : ''}`}
+                            className={`input-field font-mono font-bold text-lg ${error ? 'border-rose-500 ring-1 ring-rose-500/20' : ''}`}
                         />
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-xs font-bold pointer-events-none">
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-xs font-mono font-medium pointer-events-none">
                             / 10.0
                         </div>
                     </div>
                     {error && (
-                        <p className="text-error text-xs mt-2 font-medium flex items-center gap-1">
+                        <p className="text-rose-600 text-xs mt-1.5 font-mono flex items-center gap-1">
                             <Info className="w-3 h-3" />
                             {error}
                         </p>
@@ -76,21 +76,21 @@ export default function ManualModeInput({ semester }: ManualModeInputProps) {
                 </div>
 
                 {semester.manualSGPA && semester.manualSGPA > 0 && (
-                    <div className="flex-1 w-full">
-                        <label className="label-caps mb-2 flex items-center gap-2">
-                            <TrendingUp className="w-3.5 h-3.5" />
-                            Quick Conversion
+                    <div className="flex-1 w-full font-mono">
+                        <label className="field-label flex items-center gap-1.5">
+                            <TrendingUp className="w-3.5 h-3.5 text-accent" />
+                            Equivalent Percentage
                         </label>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-bg-primary border border-border rounded-xl p-3">
-                                <span className="text-[10px] font-bold text-text-muted uppercase block mb-1">SGPA</span>
-                                <span className="text-xl font-black text-primary">
+                        <div className="grid grid-cols-2 gap-2.5">
+                            <div className="bg-surface-card border border-border rounded-lg p-2.5">
+                                <span className="text-[10px] text-text-muted uppercase block">SGPA</span>
+                                <span className="text-base font-bold text-text-primary">
                                     {semester.manualSGPA.toFixed(2)}
                                 </span>
                             </div>
-                            <div className="bg-bg-primary border border-border rounded-xl p-3">
-                                <span className="text-[10px] font-bold text-text-muted uppercase block mb-1">Marks %</span>
-                                <span className="text-xl font-black text-accent">
+                            <div className="bg-surface-card border border-border rounded-lg p-2.5">
+                                <span className="text-[10px] text-text-muted uppercase block">Percentage</span>
+                                <span className="text-base font-bold text-accent">
                                     {percentage?.toFixed(1)}%
                                 </span>
                             </div>
@@ -99,11 +99,11 @@ export default function ManualModeInput({ semester }: ManualModeInputProps) {
                 )}
             </div>
 
-            <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl flex gap-3">
-                <Info className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-text-secondary leading-relaxed">
-                    <b className="text-primary">Manual Mode</b> uses a fixed weight of <b className="text-primary">{manualCredits} credits</b> ({data.regulation}).
-                    For precise university calculations that account for variable course credits, use <b className="text-accent underline cursor-pointer">Detailed Mode</b>.
+            <div className="p-3 bg-surface-card border border-border rounded-lg flex items-start gap-2.5 text-xs text-text-muted font-mono leading-relaxed">
+                <Info className="w-4 h-4 text-accent shrink-0 mt-0.5" />
+                <p>
+                    Manual mode assigns an estimated semester weight of <strong className="text-text-primary">{manualCredits} credits</strong> ({data.regulation}).
+                    For regulation-precise credit weighted calculations, switch to <strong>Detailed Mode</strong>.
                 </p>
             </div>
         </div>

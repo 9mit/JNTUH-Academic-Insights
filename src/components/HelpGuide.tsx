@@ -9,10 +9,13 @@ import {
     Calculator,
     FlaskConical,
     FileSpreadsheet,
-    Link,
+    Link as LinkIcon,
     Printer,
     CheckCircle2,
-    ArrowRight
+    ArrowRight,
+    AlertTriangle,
+    Lightbulb,
+    ShieldCheck
 } from 'lucide-react';
 
 const fadeIn = {
@@ -24,131 +27,127 @@ const fadeIn = {
 const steps = [
     {
         number: '01',
-        title: 'Import Your Results',
+        title: 'Import Your Academic Records',
         icon: Download,
-        color: 'from-primary to-cyan-500',
-        description: 'Choose one of three methods to import your academic data:',
+        description: 'Choose one of three ingestion pipelines to populate your academic dataset:',
         options: [
-            { icon: Search, text: 'Auto-Fetch: Enter your Hall Ticket Number to automatically fetch all results', highlight: true },
-            { icon: Upload, text: 'PDF Upload: Upload your JNTUH result memo PDFs for instant parsing' },
-            { icon: BarChart3, text: 'Manual Entry: Manually enter SGPA for any semester' }
+            { icon: Search, text: 'Auto-Fetch: Input your 10-digit Hall Ticket Number to query university servers directly', highlight: true },
+            { icon: Upload, text: 'PDF Upload: Upload official JNTUH semester result memo PDFs for automated parsing' },
+            { icon: BarChart3, text: 'Manual Entry: Directly input SGPA and credit tallies for any semester' }
         ]
     },
     {
         number: '02',
-        title: 'Explore Your Dashboard',
+        title: 'Explore Your Academic Dashboard',
         icon: BarChart3,
-        color: 'from-purple-500 to-pink-500',
-        description: 'View your complete academic performance at a glance:',
+        description: 'Comprehensive analysis of academic progression, honors tracking, and standing:',
         options: [
-            { icon: CheckCircle2, text: 'CGPA & Percentage calculated using official JNTUH formula' },
-            { icon: CheckCircle2, text: 'SGPA Trend Line showing your progress over semesters' },
-            { icon: CheckCircle2, text: 'Grade Distribution pie chart with O/A+/A/B breakdown' },
-            { icon: CheckCircle2, text: 'Credits Progress tracking earned vs required credits' },
-            { icon: CheckCircle2, text: 'Backlogs List showing subjects with F/Ab grades' }
+            { icon: CheckCircle2, text: 'Official CGPA & Percentage computed strictly using JNTUH regulation formulas' },
+            { icon: CheckCircle2, text: 'Semester-by-semester SGPA trend trajectories and moving averages' },
+            { icon: CheckCircle2, text: 'Grade distribution breakdown across O, A+, A, B, C, and passing grades' },
+            { icon: CheckCircle2, text: 'Degree Credit Audit tracking earned credits against the 160-credit threshold' },
+            { icon: CheckCircle2, text: 'Active backlog registry detailing pending remedial requirements' }
         ]
     },
     {
         number: '03',
-        title: 'Academic Insights',
+        title: 'Analytical Modeling & Planning',
         icon: Brain,
-        color: 'from-emerald-500 to-teal-500',
-        description: 'Get intelligent predictions and analysis:',
+        description: 'Predictive tools and sensitivity simulations for career and degree milestones:',
         options: [
-            { icon: Brain, text: 'Next SGPA Prediction based on your performance trend' },
-            { icon: Calculator, text: 'Target CGPA Calculator: Enter your goal → Get required SGPA' },
-            { icon: FlaskConical, text: 'What-If Calculator: Simulate grade changes to see CGPA impact' },
-            { icon: CheckCircle2, text: 'Eligibility Checker: Check if you meet company placement cutoffs' },
-            { icon: CheckCircle2, text: 'Semester Goals: Set and track your SGPA targets per semester' }
+            { icon: Brain, text: 'Weighted SGPA forecasting based on historical progression trends' },
+            { icon: Calculator, text: 'Target CGPA Calculator: Model required future semester SGPAs to hit graduation cutoffs' },
+            { icon: FlaskConical, text: 'What-If Sensitivity Simulation: Simulate hypothetical grade updates and CGPA net delta' },
+            { icon: CheckCircle2, text: 'Placement Compliance Audit: Verify eligibility against corporate recruiting cutoffs' },
+            { icon: CheckCircle2, text: 'Semester Target Benchmarks: Set and monitor SGPA targets per academic cycle' }
         ]
     },
     {
         number: '04',
-        title: 'Export & Share',
+        title: 'Export & Share Records',
         icon: FileSpreadsheet,
-        color: 'from-amber-500 to-orange-500',
-        description: 'Save and share your academic data:',
+        description: 'Generate portable records and university-standard transcript formats:',
         options: [
-            { icon: FileSpreadsheet, text: 'Export to Excel: Download a complete .xlsx file with all data' },
-            { icon: Link, text: 'Share Link: Generate a URL to share your results with others' },
-            { icon: Printer, text: 'Print Transcript: Generate a clean, JNTUH-style printable report' }
+            { icon: FileSpreadsheet, text: 'Excel Export: Structured .xlsx spreadsheet containing all semester subjects and marks' },
+            { icon: LinkIcon, text: 'Encrypted Share Link: Generate a stateless shareable link for peer review' },
+            { icon: Printer, text: 'Printable Transcript: Formatted, university-standard hardcopy audit ready for print' }
         ]
     }
 ];
 
 export default function HelpGuide() {
     return (
-        <div className="space-y-8">
+        <div className="space-y-6">
             {/* Header */}
-            <motion.div {...fadeIn} className="text-center mb-6">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-cyan-500 mb-4">
-                    <HelpCircle className="w-8 h-8 text-white" />
+            <motion.div {...fadeIn} className="text-center mb-8 pb-4 border-b border-border">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-surface-subtle border border-border mb-3 text-accent">
+                    <HelpCircle className="w-6 h-6" />
                 </div>
-                <h1 className="text-3xl font-black text-white mb-2">How to Use This App</h1>
-                <p className="text-text-muted max-w-xl mx-auto">
-                    A complete walkthrough to help you get the most out of JNTUH Academic Analyzer
+                <h1 className="text-2xl font-bold text-text-primary tracking-tight">System Manual & Operational Guide</h1>
+                <p className="text-xs text-text-muted max-w-lg mx-auto mt-1">
+                    Complete documentation for ingesting, auditing, and modeling academic results under JNTUH regulations
                 </p>
             </motion.div>
 
-            {/* Important Notice */}
+            {/* University Affiliation Notice */}
             <motion.div
                 {...fadeIn}
-                className="bg-amber-500/10 border-2 border-amber-500/30 rounded-2xl p-5 mb-4"
+                className="bg-amber-50 border border-amber-200 rounded-xl p-5"
             >
                 <div className="flex items-start gap-3">
-                    <span className="text-2xl">⚠️</span>
+                    <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                     <div>
-                        <h4 className="text-amber-400 font-bold mb-1">Important: JNTUH Affiliated Colleges Only</h4>
-                        <p className="text-sm text-amber-200/80">
-                            Auto-Fetch and all features work properly <strong className="text-white">only for JNTUH and its affiliated colleges</strong>.
-                            Students from <strong className="text-amber-300">autonomous colleges</strong> may not be able to use the Auto-Fetch feature as their results are hosted on different portals.
-                            Autonomous college students can still use <strong className="text-white">PDF Upload</strong> or <strong className="text-white">Manual Entry</strong> features.
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-amber-900 mb-1">
+                            Institutional Compatibility Notice: JNTUH Affiliated Colleges
+                        </h4>
+                        <p className="text-xs text-text-secondary leading-relaxed">
+                            The Auto-Fetch pipeline queries official JNTUH exam result servers. Autonomous institutions (e.g., CBT/portal variations) maintain private grade repositories that are not mirrored on the university root server. Students from autonomous colleges should utilize the <strong className="text-text-primary">PDF Upload</strong> or <strong className="text-text-primary">Detailed Course Entry</strong> modes to ensure 100% accurate audits.
                         </p>
                     </div>
                 </div>
             </motion.div>
 
             {/* Steps */}
-            <div className="space-y-6">
+            <div className="space-y-4">
                 {steps.map((step) => (
                     <motion.div
                         key={step.number}
                         initial={false}
                         animate={{ opacity: 1 }}
-                        className="bg-bg-card border border-white/5 rounded-3xl p-6 relative"
+                        className="bg-bg-card border border-border rounded-xl p-6 shadow-sm relative"
                     >
-                        {/* Step Number Badge - Inside box, top right */}
-                        <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-white/5 border border-white/10">
-                            <span className="text-xs font-bold text-text-muted">STEP {step.number}</span>
+                        {/* Step Number Badge */}
+                        <div className="absolute top-5 right-5 px-2.5 py-1 rounded bg-surface-subtle border border-border">
+                            <span className="text-[11px] font-mono font-bold text-text-muted">STAGE {step.number}</span>
                         </div>
 
                         <div className="flex items-start gap-4">
                             {/* Icon */}
-                            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${step.color} flex items-center justify-center flex-shrink-0`}>
-                                <step.icon className="w-6 h-6 text-white" />
+                            <div className="w-9 h-9 rounded-lg bg-surface-subtle border border-border flex items-center justify-center text-text-primary flex-shrink-0">
+                                <step.icon className="w-4 h-4 text-accent" />
                             </div>
 
                             {/* Content */}
-                            <div className="flex-1">
-                                <div className="flex items-center gap-3 mb-2">
-                                    <span className="text-xs font-bold text-text-muted uppercase tracking-wider">Step {step.number}</span>
-                                </div>
-                                <h3 className="text-xl font-bold text-white mb-2">{step.title}</h3>
-                                <p className="text-sm text-text-muted mb-4">{step.description}</p>
+                            <div className="flex-1 pr-20">
+                                <h3 className="text-base font-semibold text-text-primary mb-1">{step.title}</h3>
+                                <p className="text-xs text-text-muted mb-4">{step.description}</p>
 
                                 <div className="space-y-2">
                                     {step.options.map((option, i) => (
                                         <div
                                             key={i}
-                                            className={`flex items-center gap-3 p-3 rounded-xl ${option.highlight
-                                                ? 'bg-primary/10 border border-primary/20'
-                                                : 'bg-white/5'
-                                                }`}
+                                            className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                                                option.highlight
+                                                    ? 'bg-accent/[0.05] border-accent/30'
+                                                    : 'bg-surface-subtle border-border'
+                                            }`}
                                         >
-                                            <option.icon className={`w-4 h-4 flex-shrink-0 ${option.highlight ? 'text-primary' : 'text-text-muted'}`} />
-                                            <span className="text-sm text-white">{option.text}</span>
+                                            <option.icon className={`w-4 h-4 flex-shrink-0 ${option.highlight ? 'text-accent' : 'text-text-muted'}`} />
+                                            <span className="text-xs text-text-primary">{option.text}</span>
                                             {option.highlight && (
-                                                <span className="ml-auto text-[10px] font-bold text-primary uppercase">Recommended</span>
+                                                <span className="ml-auto text-[10px] font-mono font-bold uppercase tracking-wider text-accent bg-accent/10 px-2 py-0.5 rounded border border-accent/20">
+                                                    Recommended
+                                                </span>
                                             )}
                                         </div>
                                     ))}
@@ -159,42 +158,44 @@ export default function HelpGuide() {
                 ))}
             </div>
 
-            {/* Quick Tips */}
+            {/* Operational Best Practices */}
             <motion.div
                 {...fadeIn}
-                transition={{ delay: 0.5 }}
-                className="bg-gradient-to-br from-emerald-500/10 to-bg-card border border-emerald-500/20 rounded-3xl p-6"
+                className="bg-bg-card border border-border rounded-xl p-6 shadow-sm"
             >
-                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                    💡 Pro Tips
-                </h3>
-                <ul className="space-y-2 text-sm text-text-muted">
-                    <li className="flex items-center gap-2">
-                        <ArrowRight className="w-3 h-3 text-emerald-400" />
-                        Use <strong className="text-white">Auto-Fetch</strong> for the most accurate and complete data extraction
-                    </li>
-                    <li className="flex items-center gap-2">
-                        <ArrowRight className="w-3 h-3 text-emerald-400" />
-                        Import <strong className="text-white">all semesters</strong> to get better predictions
-                    </li>
-                    <li className="flex items-center gap-2">
-                        <ArrowRight className="w-3 h-3 text-emerald-400" />
-                        Check the <strong className="text-white">What-If Calculator</strong> before important exams
-                    </li>
-                    <li className="flex items-center gap-2">
-                        <ArrowRight className="w-3 h-3 text-emerald-400" />
-                        <strong className="text-white">Export to Excel</strong> regularly as a backup of your records
-                    </li>
-                </ul>
+                <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
+                    <Lightbulb className="w-4 h-4 text-accent" />
+                    <h3 className="text-sm font-semibold text-text-primary">Operational Best Practices</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-text-secondary">
+                    <div className="p-3 bg-surface-subtle rounded-lg border border-border flex items-start gap-2">
+                        <ArrowRight className="w-3.5 h-3.5 text-accent flex-shrink-0 mt-0.5" />
+                        <span><strong>Ingest Complete History:</strong> Auto-fetch all completed semesters to enable accurate progression trends and promotion audit.</span>
+                    </div>
+                    <div className="p-3 bg-surface-subtle rounded-lg border border-border flex items-start gap-2">
+                        <ArrowRight className="w-3.5 h-3.5 text-accent flex-shrink-0 mt-0.5" />
+                        <span><strong>Pre-Exam What-If Analysis:</strong> Model target SGPA requirements early in the semester to set realistic study allocations.</span>
+                    </div>
+                    <div className="p-3 bg-surface-subtle rounded-lg border border-border flex items-start gap-2">
+                        <ArrowRight className="w-3.5 h-3.5 text-accent flex-shrink-0 mt-0.5" />
+                        <span><strong>Verify Official Transcripts:</strong> When official cumulative cards are parsed from PDF memos, verify grade point matches against your hall ticket.</span>
+                    </div>
+                    <div className="p-3 bg-surface-subtle rounded-lg border border-border flex items-start gap-2">
+                        <ArrowRight className="w-3.5 h-3.5 text-accent flex-shrink-0 mt-0.5" />
+                        <span><strong>Regular Local Backups:</strong> Export your complete record to Excel or backup to Session Vault for permanent local archival.</span>
+                    </div>
+                </div>
             </motion.div>
 
-            {/* Privacy Notice */}
+            {/* Privacy Architecture Notice */}
             <motion.div
                 {...fadeIn}
-                transition={{ delay: 0.6 }}
-                className="text-center text-xs text-text-muted py-4"
+                className="bg-surface-subtle border border-border rounded-xl p-4 text-xs text-text-muted flex items-start gap-3"
             >
-                🔒 <strong>Privacy:</strong> Grades stay in your browser by default and clear when you leave — unless you opt into the encrypted PIN vault on Import Results. Hall-ticket fetch goes through our API; export, share links, and CGPA cards are optional.
+                <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <p className="leading-relaxed">
+                    <strong className="text-text-primary">Privacy & Storage Policy:</strong> Academic records are processed client-side and remain in your browser session by default. Data is never shared with third parties or advertising brokers. Hall Ticket auto-queries are routed directly through transient API proxies without persistent profile indexing unless explicitly saved into your encrypted Session Vault.
+                </p>
             </motion.div>
         </div>
     );

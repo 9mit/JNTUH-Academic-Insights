@@ -33,6 +33,7 @@ interface AcademicContextType {
         regulationsSeen?: string[];
         resolutionAudit?: any[];
         searchPath?: string[];
+        allAttempts?: Subject[];
     }) => void;
     hydrateAcademicData: (payload: AcademicData) => void;
     clearAllData: () => void;
@@ -233,6 +234,7 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
         regulationsSeen?: string[];
         resolutionAudit?: any[];
         searchPath?: string[];
+        allAttempts?: Subject[];
     }) => {
         const base = createEmptySemesters();
         const merged = base.map((empty) => {
@@ -276,6 +278,7 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
             regulationsSeen: payload.regulationsSeen,
             resolutionAudit: payload.resolutionAudit,
             searchPath: payload.searchPath,
+            allAttempts: payload.allAttempts,
             ...(typeof payload.officialCGPA === 'number' && payload.officialCGPA > 0
                 ? { official_cgpa: payload.officialCGPA }
                 : {}),

@@ -30,17 +30,17 @@ export default class TabErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.error) {
       return (
-        <div className="bg-rose-500/10 border border-rose-500/20 rounded-3xl p-8 text-center max-w-lg mx-auto mt-8">
-          <AlertTriangle className="w-10 h-10 text-rose-400 mx-auto mb-3" />
-          <h2 className="text-lg font-bold text-white mb-2">{this.props.tabLabel} failed to load</h2>
-          <p className="text-sm text-text-muted mb-4">{this.state.error.message}</p>
+        <div className="bg-surface-card border border-rose-200 bg-rose-50/50 rounded-xl p-6 text-center max-w-lg mx-auto mt-6 shadow-sm">
+          <AlertTriangle className="w-8 h-8 text-rose-600 mx-auto mb-3" />
+          <h2 className="text-base font-semibold text-text-primary mb-1">{this.props.tabLabel} failed to load</h2>
+          <p className="text-xs text-text-muted mb-4 font-mono">{this.state.error.message}</p>
           <button
             type="button"
             onClick={() => this.setState({ error: null })}
-            className="btn-primary inline-flex items-center gap-2 text-sm"
+            className="btn-primary inline-flex items-center gap-1.5 text-xs"
           >
-            <RefreshCw className="w-4 h-4" />
-            Try again
+            <RefreshCw className="w-3.5 h-3.5" />
+            Reload Module
           </button>
         </div>
       );

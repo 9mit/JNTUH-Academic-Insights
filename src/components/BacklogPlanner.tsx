@@ -194,16 +194,16 @@ export default function BacklogPlanner({ onOpenStudyLibrary }: BacklogPlannerPro
             />
 
             {examDeadline && (
-                <div className="card p-4 border border-amber-500/25 bg-amber-500/5 flex gap-3 items-start">
-                    <Calendar className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="card p-4 border border-amber-200 bg-amber-50 flex gap-3 items-start">
+                    <Calendar className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                     <div>
-                        <p className="text-sm font-bold text-amber-300">
+                        <p className="text-sm font-bold text-amber-900">
                             Next exam window · {examDeadline.label}
                         </p>
                         <p className="text-xs text-text-muted mt-1">
                             Target date {examDeadline.date}
                             {deadlineDays !== null && (
-                                <span className="text-amber-400 font-semibold">
+                                <span className="text-amber-800 font-semibold">
                                     {' '}· {deadlineDays >= 0 ? `${deadlineDays} day(s) left` : `${Math.abs(deadlineDays)} day(s) ago`}
                                 </span>
                             )}
@@ -217,7 +217,7 @@ export default function BacklogPlanner({ onOpenStudyLibrary }: BacklogPlannerPro
 
             {plan.length === 0 ? (
                 <div className="card p-8 text-center">
-                    <p className="text-emerald-400 font-bold">No active backlogs!</p>
+                    <p className="text-emerald-700 font-bold">No active backlogs!</p>
                 </div>
             ) : (
                 <div className="space-y-3">
@@ -242,18 +242,18 @@ export default function BacklogPlanner({ onOpenStudyLibrary }: BacklogPlannerPro
                                             {checked ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5 opacity-50" />}
                                         </button>
                                         <div className="flex-1 min-w-0">
-                                            <p className={`font-bold text-white truncate ${checked ? 'line-through' : ''}`}>
+                                            <p className={`font-bold text-text-primary truncate ${checked ? 'line-through' : ''}`}>
                                                 {item.priority}. {item.subjectName}
                                             </p>
                                             <p className="text-xs text-text-muted">
                                                 {item.subjectCode || '—'} · Sem {item.year}-{item.sem} · {item.credits} credits
                                             </p>
                                             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs">
-                                                <span className="flex items-center gap-1 text-amber-400">
+                                                <span className="flex items-center gap-1 text-amber-700">
                                                     <Calendar className="w-3 h-3" /> Week {item.week}
                                                 </span>
                                                 {item.clearBy && (
-                                                    <span className="text-rose-300">Clear by {item.clearBy}</span>
+                                                    <span className="text-rose-700">Clear by {item.clearBy}</span>
                                                 )}
                                                 <span className="text-text-secondary">{item.focus}</span>
                                             </div>
@@ -285,14 +285,14 @@ export default function BacklogPlanner({ onOpenStudyLibrary }: BacklogPlannerPro
                                             </div>
                                         </div>
                                     </div>
-                                    <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 self-start sm:mt-1" />
+                                    <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 self-start sm:mt-1" />
                                 </div>
 
                                 {open && (
-                                    <div className="border-t border-white/5 pt-3 space-y-3">
+                                    <div className="border-t border-border pt-3 space-y-3">
                                         {gap && (
-                                            <div className="bg-black/25 rounded-xl p-3 space-y-2">
-                                                <p className="text-[10px] font-bold uppercase tracking-wider text-violet-300 flex items-center gap-1.5">
+                                            <div className="bg-surface-subtle border border-border rounded-xl p-3 space-y-2">
+                                                <p className="text-[10px] font-bold uppercase tracking-wider text-accent flex items-center gap-1.5">
                                                     <Map className="w-3 h-3" /> Syllabus gap map
                                                     {gap.matched ? ` · ${gap.matched}` : ' · generic plan'}
                                                 </p>
@@ -306,9 +306,9 @@ export default function BacklogPlanner({ onOpenStudyLibrary }: BacklogPlannerPro
                                                         .slice(0, 5)
                                                         .map((u) => (
                                                             <li key={u.unit} className="text-xs text-text-muted">
-                                                                <span className="text-white font-semibold">Unit {u.unit}: {u.title}</span>
+                                                                <span className="text-text-primary font-semibold">Unit {u.unit}: {u.title}</span>
                                                                 {u.weight_hint === 'high' && (
-                                                                    <span className="ml-2 text-amber-400 text-[10px] font-bold">HIGH WEIGHT</span>
+                                                                    <span className="ml-2 text-amber-700 text-[10px] font-bold">HIGH WEIGHT</span>
                                                                 )}
                                                                 {u.topics?.length ? (
                                                                     <span className="block text-[11px] mt-0.5">{u.topics.join(' · ')}</span>
@@ -319,8 +319,8 @@ export default function BacklogPlanner({ onOpenStudyLibrary }: BacklogPlannerPro
                                             </div>
                                         )}
                                         {pack && (
-                                            <div className="bg-black/25 rounded-xl p-3 space-y-2">
-                                                <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1.5">
+                                            <div className="bg-surface-subtle border border-border rounded-xl p-3 space-y-2">
+                                                <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
                                                     <FileQuestion className="w-3 h-3" /> {pack.title || 'PYQ pack'}
                                                 </p>
                                                 {pack.topics?.length ? (

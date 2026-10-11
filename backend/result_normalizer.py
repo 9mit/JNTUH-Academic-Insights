@@ -94,6 +94,7 @@ class NormalizedStudentResult:
             "student_status": self.student_status,
             "fetch_status": self.fetch_status,
             "source_error_detail": self.source_error_detail,
+            "all_attempts": self.meta.get("all_attempts") or [s.to_dict() for s in self.subjects],
             "meta": self.meta,
         }
 
@@ -260,5 +261,8 @@ def normalize_student_result(
         fetch_status="FOUND" if (norm_subs or norm_sems) else "NOT_FOUND",
         regulations_seen=regulations_seen,
         hall_tickets=raw.get("hall_tickets") or ([htno] if htno else []),
-        meta=dict(raw.get("fetch_meta") or {}),
+        meta={
+            **dict(raw.get("fetch_meta") or {}),
+            "all_attempts": raw.get("all_attempts") or [],
+        },
     )
