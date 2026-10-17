@@ -192,7 +192,7 @@ export default function NotificationsHub() {
             let hadFetchFailure = false;
 
             if (notifResult.status === 'fulfilled' && Array.isArray(notifResult.value?.items)) {
-                items = notifResult.value.items.map((raw: any) => ({
+                items = (notifResult.value.items as Record<string, unknown>[]).map((raw) => ({
                     id: String(raw.id || Math.random()),
                     title: String(raw.title || ''),
                     date: String(raw.date || ''),

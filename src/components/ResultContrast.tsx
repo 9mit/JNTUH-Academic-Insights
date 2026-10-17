@@ -43,6 +43,26 @@ interface StudentRecord {
   subjects: Subject[];
 }
 
+interface RawResponseSubject {
+  subject_code?: string;
+  code?: string;
+  subject_name?: string;
+  name?: string;
+  grade?: string;
+  credits?: number;
+  internal?: number;
+  external?: number;
+  total?: number;
+  year?: number;
+  sem?: number;
+}
+
+interface RawResponseSemester {
+  year?: number;
+  sem?: number;
+  sgpa?: number;
+}
+
 export default function ResultContrast() {
   const { data: currentData, getCGPA } = useAcademic();
   const currentCGPA = getCGPA();
@@ -95,26 +115,27 @@ export default function ResultContrast() {
     }
 
     const payload = await res.json();
-    const rawSubjects = (payload.subjects || []) as any[];
-    const subjectList: Subject[] = rawSubjects.map((sub: any, sIdx: number) => ({
+    const rawSubjects = (payload.subjects || []) as RawResponseSubject[];
+    const subjectList: Subject[] = rawSubjects.map((sub, sIdx: number) => ({
       id: `sub-${sub.subject_code || sub.code || sub.subject_name || sub.name}-${sIdx}`,
       code: sub.subject_code || sub.code || '',
       name: sub.subject_name || sub.name || 'Subject',
-      grade: sub.grade || 'F',
+      grade: (sub.grade || 'F') as import('../types').Grade,
       credits: typeof sub.credits === 'number' ? sub.credits : 0,
       internal: sub.internal,
       external: sub.external,
       total: sub.total,
     }));
 
-    const semesters: Semester[] = (payload.semesters || []).map((s: any, idx: number) => {
+    const rawSemesters = (payload.semesters || []) as RawResponseSemester[];
+    const semesters: Semester[] = rawSemesters.map((s, idx: number) => {
       const semSubs = rawSubjects
-        .filter((rs: any) => rs.year === s.year && rs.sem === s.sem)
-        .map((rs: any, sIdx: number) => ({
+        .filter((rs) => rs.year === s.year && rs.sem === s.sem)
+        .map((rs, sIdx: number) => ({
           id: `sem-sub-${rs.subject_code || rs.code || rs.name}-${sIdx}`,
           code: rs.subject_code || rs.code || '',
           name: rs.subject_name || rs.name || 'Subject',
-          grade: rs.grade || 'F',
+          grade: (rs.grade || 'F') as import('../types').Grade,
           credits: typeof rs.credits === 'number' ? rs.credits : 0,
         }));
 

@@ -1,5 +1,5 @@
 import { createContext, useContext, useCallback, useMemo, useState, useEffect } from 'react';
-import type { AcademicData, Semester, Subject, Regulation } from '../types';
+import type { AcademicData, Semester, Subject, Regulation, ResolutionAuditItem } from '../types';
 
 import { createEmptySemesters, generateId, toPercentage } from '../constants/grading';
 import { getSemesterSGPA, calculateCGPA } from '../utils/calculations';
@@ -31,7 +31,7 @@ interface AcademicContextType {
         studentStatus?: 'active' | 'detained' | 'graduated' | 'incomplete';
         isConsolidated?: boolean;
         regulationsSeen?: string[];
-        resolutionAudit?: any[];
+        resolutionAudit?: ResolutionAuditItem[];
         searchPath?: string[];
         allAttempts?: Subject[];
     }) => void;
@@ -232,7 +232,7 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
         studentStatus?: 'active' | 'detained' | 'graduated' | 'incomplete';
         isConsolidated?: boolean;
         regulationsSeen?: string[];
-        resolutionAudit?: any[];
+        resolutionAudit?: ResolutionAuditItem[];
         searchPath?: string[];
         allAttempts?: Subject[];
     }) => {

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, FileText, HelpCircle, PenLine,
   Brain, BookOpen, Menu, X, Bell, Coins, Target, ChevronRight, Briefcase,
-  Users, CalendarDays, Search, Trophy, Sparkles,
+  Users, CalendarDays, Search, Trophy, Sparkles, ArrowLeft,
 } from 'lucide-react';
 import type { TabType } from '../../types';
 import AmbientBackground from '../ui/AmbientBackground';
@@ -128,6 +128,25 @@ export default function AppShell({
     const content = document.querySelector('.app-content');
     if (content) content.scrollTop = 0;
   }, [activeTab]);
+
+  const hasNavigatedRef = useRef(false);
+  const isInitialMount = useRef(true);
+
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    hasNavigatedRef.current = true;
+  }, [activeTab]);
+
+  const handleBack = () => {
+    if (hasNavigatedRef.current && window.history.length > 1) {
+      window.history.back();
+    } else {
+      selectTab('input');
+    }
+  };
 
   const selectTab = (id: TabType) => {
     onTabChange(id);
@@ -258,13 +277,33 @@ export default function AppShell({
 
       <div className="app-main">
         <header className="app-topbar no-print flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0">
             <button type="button" className="mobile-menu-btn lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation">
               <Menu className="w-5 h-5 text-text-primary" />
             </button>
+
+            {activeTab !== 'input' && (
+              <button
+                type="button"
+                onClick={handleBack}
+                className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface-subtle hover:bg-white border border-border text-text-muted hover:text-text-primary transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+                aria-label="Back to previous page"
+                title="Go back (Alt+Left)"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+            )}
+
             <div className="topbar-center min-w-0">
               <div className="flex items-center gap-2 text-[11px] font-mono text-text-muted">
-                <span>Academic Insights</span>
+                <button
+                  type="button"
+                  onClick={() => selectTab('input')}
+                  className="hover:text-accent transition-colors cursor-pointer text-left"
+                  title="Go to Import Results"
+                >
+                  Academic Insights
+                </button>
                 <span>/</span>
                 <span className="text-accent font-semibold">{activeLabel}</span>
               </div>

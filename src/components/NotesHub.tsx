@@ -123,7 +123,7 @@ export default function NotesHub() {
                         .order('created_at', { ascending: false });
 
                     const result = await Promise.race([supabasePromise, timeoutPromise]);
-                    const { data, error: dbError } = result as any;
+                    const { data, error: dbError } = (result || {}) as { data: ContributedNote[] | null; error: Error | null };
                     if (dbError) throw dbError;
                     if (data) notes = data as ContributedNote[];
                 } catch (err) {

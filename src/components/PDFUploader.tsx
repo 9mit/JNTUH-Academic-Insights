@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useAcademic } from '../context/AcademicContext';
-import type { Regulation, Grade, Subject, Semester } from '../types';
+import type { Regulation, Grade, Subject, Semester, ResolutionAuditItem } from '../types';
 import { generateId } from '../constants/grading';
 import { uploadPDFs, fetchByHallTicket } from '../api/client';
 import { normalizeNonCreditSubject } from '../utils/nonCreditSubjects';
@@ -93,7 +93,7 @@ function CelebrationModal({ isOpen, onClose, studentName }: { isOpen: boolean; o
     );
 }
 
-export function sanitizeJntuhHtno(raw: string): { clean: string; changed: boolean } {
+function sanitizeJntuhHtno(raw: string): { clean: string; changed: boolean } {
     const s = (raw || '').trim().toUpperCase();
     if (s.length !== 10) return { clean: s, changed: false };
 
@@ -140,11 +140,11 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
         regulationsSeen?: string[],
         fetchMeta?: { academic_semesters?: number; all_semesters?: number; hard_refresh?: boolean },
         extraAudit?: {
-            resolution_audit?: any[];
+            resolution_audit?: ResolutionAuditItem[];
             search_path?: string[];
             is_consolidated?: boolean;
             student_status?: 'active' | 'detained' | 'graduated' | 'incomplete';
-            all_attempts?: any[];
+            all_attempts?: Array<BackendSubject & { exam_code?: string; attempt_type?: string }>;
         }
     ) => {
         const semesterMap: { [key: string]: Subject[] } = {};
@@ -252,7 +252,8 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                 }
             }
 
-            const mappedAllAttempts: Subject[] = (extraAudit?.all_attempts || subjects).map((sub: any, sIdx: number) => ({
+            const rawAttempts = (extraAudit?.all_attempts || subjects) as Array<BackendSubject & { exam_code?: string; attempt_type?: string; code?: string; name?: string }>;
+            const mappedAllAttempts: Subject[] = rawAttempts.map((sub, sIdx: number) => ({
                 id: `attempt-${sub.subject_code || sub.code || 'sub'}-${sIdx}`,
                 code: sub.subject_code || sub.code,
                 name: sub.subject_name || sub.name || 'Course',
@@ -348,9 +349,15 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
 
             try {
                 if (htno) {
-                    const next = [{ htno, studentName: studentName || 'Student', cgpa: officialCGPA || 0 }, ...recentSearches.filter(s => s.htno !== htno)].slice(0, 4);
-                    setRecentSearches(next);
-                    localStorage.setItem('jntuh_recent_htno_v2', JSON.stringify(next));
+                    setRecentSearches(prev => {
+                        const next = [{ htno, studentName: studentName || 'Student', cgpa: officialCGPA || 0 }, ...prev.filter(s => s.htno !== htno)].slice(0, 4);
+                        try {
+                            localStorage.setItem('jntuh_recent_htno_v2', JSON.stringify(next));
+                        } catch {
+                            /* ignore storage errors */
+                        }
+                        return next;
+                    });
                 }
             } catch {
                 /* ignore storage errors */
@@ -421,6 +428,13 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
             const response = await fetchByHallTicket(targetHtno, forceRefresh, selectedReg);
 
             if (response.success && response.subjects) {
+                const respAudit = response as unknown as {
+                    resolution_audit?: ResolutionAuditItem[];
+                    search_path?: string[];
+                    is_consolidated?: boolean;
+                    student_status?: 'active' | 'detained' | 'graduated' | 'incomplete';
+                    all_attempts?: Array<BackendSubject & { exam_code?: string; attempt_type?: string }>;
+                };
                 processResults(
                     response.subjects,
                     response.semesters,
@@ -433,11 +447,11 @@ export default function PDFUploader({ onImportSuccess }: { onImportSuccess?: () 
                         | { academic_semesters?: number; all_semesters?: number; hard_refresh?: boolean }
                         | undefined,
                     {
-                        resolution_audit: (response as any).resolution_audit,
-                        search_path: (response as any).search_path,
-                        is_consolidated: (response as any).is_consolidated,
-                        student_status: (response as any).student_status,
-                        all_attempts: (response as any).all_attempts,
+                        resolution_audit: respAudit.resolution_audit,
+                        search_path: respAudit.search_path,
+                        is_consolidated: respAudit.is_consolidated,
+                        student_status: respAudit.student_status,
+                        all_attempts: respAudit.all_attempts,
                     }
                 );
                 toast.dismiss(toastId);

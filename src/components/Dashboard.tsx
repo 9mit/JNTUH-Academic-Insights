@@ -33,6 +33,15 @@ export default function Dashboard() {
                 <p className="empty-state-desc">
                     Import results via hall ticket auto-fetch or upload memo PDFs to generate comprehensive performance metrics, credit tracking, and grade distribution.
                 </p>
+                <div className="mt-5">
+                    <button
+                        type="button"
+                        onClick={() => { window.location.hash = '#/import'; }}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-accent text-white text-xs font-semibold shadow-xs hover:bg-accent/90 transition-all cursor-pointer"
+                    >
+                        ← Go to Import Results
+                    </button>
+                </div>
             </div>
         );
     }

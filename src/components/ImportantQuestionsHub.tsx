@@ -514,7 +514,7 @@ export default function ImportantQuestionsHub({
 
                         <select
                             value={dropFilter}
-                            onChange={e => setDropFilter(e.target.value as any)}
+                            onChange={e => setDropFilter(e.target.value as 'all' | 'mid1' | 'mid2' | 'supply')}
                             aria-label="Filter by exam cycle release"
                             className="px-3 py-2.5 rounded-xl text-xs font-medium bg-surface-card border border-border text-text-primary focus:outline-none focus:border-accent cursor-pointer"
                         >

@@ -87,7 +87,7 @@ const TAB_TO_HASH: Record<TabType, string> = {
   predictions: 'goals',
   notes: 'notes',
   notifications: 'updates',
-  jobs: 'update',
+  jobs: 'opportunities',
   compare: 'compare',
   calendars: 'calendars',
   class: 'class',
@@ -107,22 +107,37 @@ function AppContent() {
   const { getCGPA, importSemesters, setStudentInfo, setRegulation, data } = useAcademic();
   const { cgpa, percentage } = getCGPA();
 
-  const setActiveTab = useCallback((tab: TabType) => {
+  const setActiveTab = useCallback((tab: TabType, options?: { replace?: boolean }) => {
     setActiveTabState(tab);
     const hash = TAB_TO_HASH[tab] || 'import';
     const next = `#/${hash}`;
-    if (window.location.hash !== next) {
-      window.history.replaceState({}, '', `${window.location.pathname}${window.location.search}${next}`);
+    const currentTab = tabFromHash();
+    if (currentTab !== tab || window.location.hash !== next) {
+      if (options?.replace) {
+        window.history.replaceState({}, '', `${window.location.pathname}${window.location.search}${next}`);
+      } else {
+        window.location.hash = next;
+      }
     }
   }, []);
 
   useEffect(() => {
-    const onHash = () => setActiveTabState(tabFromHash());
-    window.addEventListener('hashchange', onHash);
+    const onHashChange = () => {
+      const nextTab = tabFromHash();
+      setActiveTabState(nextTab);
+    };
+
+    window.addEventListener('hashchange', onHashChange);
+    window.addEventListener('popstate', onHashChange);
+
     if (!window.location.hash) {
       window.history.replaceState({}, '', `${window.location.pathname}${window.location.search}#/import`);
     }
-    return () => window.removeEventListener('hashchange', onHash);
+
+    return () => {
+      window.removeEventListener('hashchange', onHashChange);
+      window.removeEventListener('popstate', onHashChange);
+    };
   }, []);
 
   useEffect(() => {
